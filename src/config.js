@@ -20,4 +20,13 @@ export const config = {
   secretKey: process.env.SECRET_KEY || '',
   dataDir: path.resolve(process.env.DATA_DIR || './data'),
   graphVersion: process.env.GRAPH_VERSION || 'v23.0',
+  supabaseUrl: process.env.SUPABASE_URL || '',
+  supabaseKey: process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  keepAlive: !['0', 'false', 'non'].includes(String(process.env.KEEP_ALIVE ?? 'true').toLowerCase()),
 };
+
+// Sans disque permanent, une clé générée automatiquement serait perdue à chaque redémarrage
+// et les clés API chiffrées deviendraient illisibles.
+if (config.supabaseUrl && !config.secretKey) {
+  throw new Error('SECRET_KEY est obligatoire quand les données sont stockées dans Supabase.');
+}

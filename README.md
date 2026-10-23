@@ -40,7 +40,38 @@ Ouvrez <http://localhost:3000>. Si `ADMIN_PASSWORD` est vide, le site vous deman
 
 > Facebook doit pouvoir joindre votre serveur en **HTTPS**. Pour tester depuis votre PC, utilisez un tunnel, par exemple `npx cloudflared tunnel --url http://localhost:3000` ou `ngrok http 3000`, puis mettez l'adresse obtenue dans `PUBLIC_URL`.
 
-**Hébergement conseillé :** Render (le fichier `render.yaml` est fourni), Railway, Fly.io ou un VPS. Prévoyez un **disque persistant** pour `DATA_DIR` : sur un hébergement gratuit sans disque, les réglages sont effacés à chaque redémarrage.
+### 🆓 Hébergement 100 % gratuit (Render + Supabase)
+
+Tout fonctionne sans payer : **Render** (serveur), **Supabase** (données), **Gemini** (IA) et **Facebook** (API) sont gratuits. Comptez une quinzaine de minutes.
+
+**A. Supabase (stockage des données)**
+1. Créez un compte gratuit sur <https://supabase.com>, puis un **nouveau projet**.
+2. Ouvrez **SQL Editor → New query**, collez le contenu du fichier [`supabase.sql`](supabase.sql) et cliquez sur **Run**.
+3. Dans **Project Settings → API Keys**, notez l'**URL du projet** et la **clé secrète** (`sb_secret_…`, ou l'ancienne clé `service_role`). Cette clé ne doit jamais être partagée.
+
+**B. GitHub**
+Mettez ce projet dans votre dépôt GitHub. C'est déjà le cas si vous lisez ce fichier sur GitHub.
+
+**C. Render (serveur)**
+1. Créez un compte gratuit sur <https://render.com> et connectez votre GitHub.
+2. Cliquez sur **New → Blueprint** et choisissez ce dépôt : le fichier `render.yaml` configure tout en mode **Free**.
+3. Remplissez les variables demandées :
+   - `ADMIN_PASSWORD` : le mot de passe de votre tableau de bord ;
+   - `SUPABASE_URL` et `SUPABASE_SECRET_KEY` : les valeurs notées à l'étape A ;
+   - `PUBLIC_URL` : l'adresse de votre service, par exemple `https://ainai-xxxx.onrender.com`. Vous la verrez après le premier déploiement ; ajoutez-la alors dans **Environment** et redéployez.
+
+   `SECRET_KEY` est générée automatiquement. Ne la changez plus ensuite, sinon les clés API enregistrées deviennent illisibles.
+4. Ouvrez votre adresse `https://….onrender.com` : le tableau de bord s'affiche.
+
+**Pourquoi ça tient sur le gratuit :**
+- Render endort un service gratuit après 15 minutes sans visite. AINAI se rend visite toutes les 10 minutes pour rester éveillé et ne pas rater de messages. Par sécurité, vous pouvez aussi créer une tâche gratuite sur <https://cron-job.org> qui appelle `https://VOTRE-ADRESSE/healthz` toutes les 10 minutes.
+- Le plan gratuit de Render inclut 750 heures par mois, ce qui suffit pour un service allumé en permanence.
+- Supabase met en pause un projet inactif pendant 7 jours. AINAI le consulte une fois par jour pour l'éviter.
+- Les quotas gratuits sont largement suffisants pour une page : Gemini offre des centaines de requêtes par jour (ajoutez Groq ou OpenRouter, gratuits aussi, en relais) et Supabase 500 Mo de base de données.
+
+> Autres hébergeurs avec Supabase : Koyeb (gratuit), ou n'importe quel VPS. Avec un disque permanent, Supabase n'est pas nécessaire : AINAI utilise alors `data/db.json`.
+>
+> Vercel n'est pas recommandé : son fonctionnement « serverless » coupe les traitements en arrière-plan, et le plan gratuit est réservé à un usage non commercial.
 
 ### 2. Obtenir une clé Gemini (gratuite)
 
@@ -81,7 +112,7 @@ src/
   brain.js            prompt, base de connaissances, règles, analyse JSON
   ai/                 Gemini, Claude (SDK officiel), fournisseurs compatibles OpenAI, relais automatique
   facebook/graph.js   API Graph (réponses, MP privés, like, masquage, OAuth)
-  store.js            stockage JSON (data/db.json)
+  store.js            stockage JSON (data/db.json) ou Supabase (supabase.js)
 public/               tableau de bord (HTML/CSS/JS, sans framework)
 test/                 tests (node --test)
 ```

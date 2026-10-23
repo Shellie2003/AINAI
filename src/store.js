@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { randomId } from './crypto.js';
+import { supabaseRemote } from './supabase.js';
 
 // Base de données JSON simple : un seul propriétaire de page, quelques milliers d'événements.
 const FILE = path.join(config.dataDir, 'db.json');
@@ -63,11 +64,20 @@ function merge(base, extra) {
   return out;
 }
 
+const MAX_CONVERSATIONS = 2000;
+
 class Store {
-  constructor(file) {
+  /**
+   * @param file   fichier JSON local (serveur avec disque permanent)
+   * @param remote stockage distant { load(), save(data) } (hébergement gratuit sans disque)
+   */
+  constructor({ file = null, remote = null } = {}) {
     this.file = file;
+    this.remote = remote;
     this.data = defaultData();
     this.timer = null;
+    this.writing = null;
+    this.dirty = false;
     if (file && fs.existsSync(file)) {
       try {
         this.data = merge(defaultData(), JSON.parse(fs.readFileSync(file, 'utf8')));
@@ -78,19 +88,64 @@ class Store {
     }
   }
 
+  // Chargement du stockage distant. En cas d'échec on n'écrase JAMAIS les données distantes avec une base vide.
+  async init({ retries = 5, delayMs = 3000 } = {}) {
+    if (!this.remote) return;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const remoteData = await this.remote.load();
+        if (remoteData) this.data = merge(defaultData(), remoteData);
+        this.ready = true;
+        console.log(`[store] données chargées depuis ${this.remote.name}`);
+        return;
+      } catch (err) {
+        if (attempt >= retries) throw err;
+        console.error(`[store] chargement impossible (essai ${attempt}/${retries}) : ${err.message}`);
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+
   save() {
-    if (!this.file || this.timer) return;
-    this.timer = setTimeout(() => this.flush(), 300);
+    if (!this.file && !this.remote) return;
+    if (this.remote && !this.ready) return;
+    this.dirty = true;
+    if (this.timer) return;
+    // Écritures distantes regroupées pour rester dans les quotas gratuits
+    this.timer = setTimeout(() => this.flush(), this.remote ? 2000 : 300);
+  }
+
+  compact() {
+    const convs = Object.values(this.data.conversations);
+    if (convs.length > MAX_CONVERSATIONS) {
+      convs.sort((a, b) => b.updatedAt - a.updatedAt);
+      for (const c of convs.slice(MAX_CONVERSATIONS)) delete this.data.conversations[c.key];
+    }
   }
 
   flush() {
     clearTimeout(this.timer);
     this.timer = null;
-    if (!this.file) return;
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data));
-    fs.renameSync(tmp, this.file);
+    if (!this.dirty) return this.writing || Promise.resolve();
+    this.dirty = false;
+    this.compact();
+    if (this.file) {
+      fs.mkdirSync(path.dirname(this.file), { recursive: true });
+      const tmp = `${this.file}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(this.data));
+      fs.renameSync(tmp, this.file);
+    }
+    if (!this.remote) return Promise.resolve();
+    // Une seule écriture distante à la fois ; les modifications faites entre-temps partent ensuite.
+    const previous = this.writing || Promise.resolve();
+    this.writing = previous
+      .then(() => this.remote.save(this.data))
+      .catch((err) => {
+        console.error(`[store] sauvegarde distante échouée : ${err.message}`);
+        this.dirty = true;
+        if (!this.timer) this.timer = setTimeout(() => this.flush(), 15000);
+      });
+    return this.writing;
   }
 
   get settings() {
@@ -150,5 +205,11 @@ class Store {
   }
 }
 
-export const store = new Store(process.env.NODE_ENV === 'test' ? null : FILE);
+function createStore() {
+  if (process.env.NODE_ENV === 'test') return new Store();
+  if (config.supabaseUrl && config.supabaseKey) return new Store({ remote: supabaseRemote(config.supabaseUrl, config.supabaseKey) });
+  return new Store({ file: FILE });
+}
+
+export const store = createStore();
 export { Store };

@@ -154,6 +154,7 @@ async function home() {
   main.append(h(`
     <h1>Bonjour 👋</h1>
     <p class="subtitle">Votre assistante répond à vos commentaires et messages Facebook, 24 h/24.</p>
+    ${state.ephemeralStorage ? '<div class="card"><span class="pill danger">Attention</span> Cet hébergement n’a pas de disque permanent : vos réglages seront effacés au prochain redémarrage. Ajoutez <code>SUPABASE_URL</code> et <code>SUPABASE_SECRET_KEY</code> (gratuit, voir le README).</div>' : ''}
     ${done < checklist.length ? `<div class="card"><h2>🚀 Démarrage rapide (${done}/${checklist.length})</h2><ol class="steps">${checklist.map(([ok, label, tab]) => `<li class="${ok ? 'done' : ''}"><a href="#${tab}">${label}</a></li>`).join('')}</ol></div>` : ''}
     <div class="stats">
       <div class="stat"><div class="v">${sum('comments_out', [today])}</div><div class="l">Commentaires répondus aujourd’hui</div></div>

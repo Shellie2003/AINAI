@@ -176,6 +176,9 @@ function publicState(req) {
     },
     pages: store.data.pages.map(({ accessToken, ...p }) => ({ ...p, hasToken: Boolean(accessToken) })),
     pendingCount: store.data.queue.filter((q) => q.status === 'pending').length,
+    storage: store.remote ? store.remote.name : 'fichier local',
+    // Render gratuit n'a pas de disque permanent : sans Supabase, tout serait perdu au redémarrage
+    ephemeralStorage: !store.remote && Boolean(process.env.RENDER) && !config.dataDir.startsWith('/var/data'),
   };
 }
 
@@ -374,10 +377,30 @@ app.get('/healthz', (_req, res) => res.json({ ok: true }));
 app.get(['/privacy', '/confidentialite'], (_req, res) => res.sendFile(path.join(here, '..', 'public', 'privacy.html')));
 app.use(express.static(path.join(here, '..', 'public')));
 
+// Les hébergements gratuits (Render…) endorment le serveur après 15 min sans visite :
+// un endormi rate les messages Facebook. On se rend visite toutes les 10 minutes.
+export function startKeepAlive(url, everyMs = 10 * 60_000) {
+  const timer = setInterval(() => {
+    fetch(`${url}/healthz`, { signal: AbortSignal.timeout(15000) }).catch(() => {});
+  }, everyMs);
+  // Supabase gratuit met en pause un projet inactif 7 jours : une lecture par jour suffit à l'éviter.
+  const daily = store.remote && setInterval(() => store.remote.load().catch(() => {}), 24 * 3600_000);
+  timer.unref();
+  daily?.unref();
+  return timer;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  await store.init();
   app.listen(config.port, () => {
     console.log(`AINAI prêt sur http://localhost:${config.port}`);
     if (!config.publicUrl) console.log('⚠️  PUBLIC_URL non défini : nécessaire pour le webhook Facebook (HTTPS).');
+    if (config.publicUrl && config.keepAlive) startKeepAlive(config.publicUrl);
   });
-  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => (store.flush(), process.exit(0)));
+  for (const sig of ['SIGINT', 'SIGTERM']) {
+    process.on(sig, async () => {
+      await store.flush();
+      process.exit(0);
+    });
+  }
 }
