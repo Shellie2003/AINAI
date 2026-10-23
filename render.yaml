@@ -1,5 +1,6 @@
-# Déploiement 100 % gratuit sur Render (https://render.com) + Supabase pour les données.
-# Le plan gratuit de Render n'a pas de disque permanent : les données vont dans Supabase (gratuit).
+# Déploiement 100 % gratuit sur Render (https://render.com) + une base de données gratuite.
+# Le plan gratuit de Render n'a pas de disque permanent : renseignez DATABASE_URL (MongoDB Atlas, Neon…)
+# ou bien UPSTASH_REDIS_REST_URL/TOKEN, ou SUPABASE_URL/SUPABASE_SECRET_KEY. Laissez les autres vides.
 services:
   - type: web
     name: ainai
@@ -14,6 +15,12 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: PUBLIC_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
       - key: SUPABASE_URL
         sync: false

@@ -40,14 +40,44 @@ Ouvrez <http://localhost:3000>. Si `ADMIN_PASSWORD` est vide, le site vous deman
 
 > Facebook doit pouvoir joindre votre serveur en **HTTPS**. Pour tester depuis votre PC, utilisez un tunnel, par exemple `npx cloudflared tunnel --url http://localhost:3000` ou `ngrok http 3000`, puis mettez l'adresse obtenue dans `PUBLIC_URL`.
 
-### 🆓 Hébergement 100 % gratuit (Render + Supabase)
+### 🆓 Hébergement 100 % gratuit (Render + une base de données gratuite)
 
-Tout fonctionne sans payer : **Render** (serveur), **Supabase** (données), **Gemini** (IA) et **Facebook** (API) sont gratuits. Comptez une quinzaine de minutes.
+Tout fonctionne sans payer : **Render** (serveur), une **base de données gratuite**, **Gemini** (IA) et **Facebook** (API). Comptez une quinzaine de minutes.
 
-**A. Supabase (stockage des données)**
-1. Créez un compte gratuit sur <https://supabase.com>, puis un **nouveau projet**.
-2. Ouvrez **SQL Editor → New query**, collez le contenu du fichier [`supabase.sql`](supabase.sql) et cliquez sur **Run**.
-3. Dans **Project Settings → API Keys**, notez l'**URL du projet** et la **clé secrète** (`sb_secret_…`, ou l'ancienne clé `service_role`). Cette clé ne doit jamais être partagée.
+**A. Choisir UNE base de données gratuite**
+
+Le plan gratuit de Render efface son disque à chaque redémarrage : vos réglages doivent donc être stockés ailleurs. AINAI accepte les services suivants ; un seul suffit.
+
+| Service | Gratuit | Ce qu'il faut donner à AINAI |
+|---|---|---|
+| **MongoDB Atlas** ⭐ conseillé | cluster M0, 512 Mo | `DATABASE_URL=mongodb+srv://…` |
+| **Neon** (Postgres) | 0,5 Go | `DATABASE_URL=postgresql://…` |
+| **Upstash** (Redis) | 256 Mo | `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` |
+| **Supabase** | 500 Mo | `SUPABASE_URL` et `SUPABASE_SECRET_KEY`, après avoir exécuté [`supabase.sql`](supabase.sql) |
+
+Avec MongoDB, Neon ou Upstash, **rien d'autre à faire** : AINAI crée lui-même ce dont il a besoin. Toute la base AINAI tient dans un seul enregistrement, de quelques centaines de Ko.
+
+> 💡 **Vous avez déjà atteint la limite de projets Supabase ?** La limite porte sur le nombre de *projets*, pas de tables. Vous pouvez exécuter `supabase.sql` dans un projet existant : AINAI n'y ajoute qu'une table, `ainai_store`.
+
+<details><summary><b>MongoDB Atlas, pas à pas</b></summary>
+
+1. Créez un compte sur <https://www.mongodb.com/cloud/atlas/register>, puis un cluster **M0 (Free)**.
+2. **Database Access** : créez un utilisateur et un mot de passe. Évitez les caractères spéciaux comme `@`, `:` ou `/` dans le mot de passe.
+3. **Network Access** : ajoutez `0.0.0.0/0`. Render n'a pas d'adresse IP fixe en gratuit, la protection repose donc sur le mot de passe.
+4. **Connect → Drivers** : copiez l'adresse `mongodb+srv://…` et remplacez `<db_password>` par votre mot de passe. C'est votre `DATABASE_URL`.
+</details>
+
+<details><summary><b>Neon (Postgres), pas à pas</b></summary>
+
+1. Créez un compte sur <https://neon.tech> et un projet.
+2. Sur le tableau de bord, cliquez sur **Connect** et copiez la *connection string* (`postgresql://…?sslmode=require`). C'est votre `DATABASE_URL`.
+</details>
+
+<details><summary><b>Upstash Redis, pas à pas</b></summary>
+
+1. Créez un compte sur <https://upstash.com> et une base **Redis** (plan Free).
+2. Dans la section **REST API**, copiez `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`.
+</details>
 
 **B. GitHub**
 Mettez ce projet dans votre dépôt GitHub. C'est déjà le cas si vous lisez ce fichier sur GitHub.
@@ -57,19 +87,20 @@ Mettez ce projet dans votre dépôt GitHub. C'est déjà le cas si vous lisez ce
 2. Cliquez sur **New → Blueprint** et choisissez ce dépôt : le fichier `render.yaml` configure tout en mode **Free**.
 3. Remplissez les variables demandées :
    - `ADMIN_PASSWORD` : le mot de passe de votre tableau de bord ;
-   - `SUPABASE_URL` et `SUPABASE_SECRET_KEY` : les valeurs notées à l'étape A ;
+   - les variables de **la** base choisie à l'étape A, en laissant les autres vides ;
    - `PUBLIC_URL` : l'adresse de votre service, par exemple `https://ainai-xxxx.onrender.com`. Vous la verrez après le premier déploiement ; ajoutez-la alors dans **Environment** et redéployez.
 
    `SECRET_KEY` est générée automatiquement. Ne la changez plus ensuite, sinon les clés API enregistrées deviennent illisibles.
-4. Ouvrez votre adresse `https://….onrender.com` : le tableau de bord s'affiche.
+4. Ouvrez votre adresse `https://….onrender.com` : le tableau de bord s'affiche. Dans les journaux Render, la ligne `[store] données chargées depuis …` confirme que la base est bien reliée.
 
 **Pourquoi ça tient sur le gratuit :**
 - Render endort un service gratuit après 15 minutes sans visite. AINAI se rend visite toutes les 10 minutes pour rester éveillé et ne pas rater de messages. Par sécurité, vous pouvez aussi créer une tâche gratuite sur <https://cron-job.org> qui appelle `https://VOTRE-ADRESSE/healthz` toutes les 10 minutes.
 - Le plan gratuit de Render inclut 750 heures par mois, ce qui suffit pour un service allumé en permanence.
-- Supabase met en pause un projet inactif pendant 7 jours. AINAI le consulte une fois par jour pour l'éviter.
-- Les quotas gratuits sont largement suffisants pour une page : Gemini offre des centaines de requêtes par jour (ajoutez Groq ou OpenRouter, gratuits aussi, en relais) et Supabase 500 Mo de base de données.
+- Les bases gratuites mettent en veille les projets inactifs. AINAI consulte la sienne une fois par jour pour l'éviter, et regroupe ses écritures (au plus une toutes les 5 secondes) pour rester dans les quotas.
+- Les clés API sont chiffrées avant d'être enregistrées : même la base de données ne les voit pas en clair.
+- Pour l'IA, Gemini est gratuit. Ajoutez Groq ou OpenRouter, gratuits aussi, comme relais en cas de quota atteint.
 
-> Autres hébergeurs avec Supabase : Koyeb (gratuit), ou n'importe quel VPS. Avec un disque permanent, Supabase n'est pas nécessaire : AINAI utilise alors `data/db.json`.
+> Autres hébergeurs : Koyeb (gratuit), ou n'importe quel VPS. Avec un disque permanent, aucune base distante n'est nécessaire : AINAI utilise alors `data/db.json`.
 >
 > Vercel n'est pas recommandé : son fonctionnement « serverless » coupe les traitements en arrière-plan, et le plan gratuit est réservé à un usage non commercial.
 
@@ -112,7 +143,7 @@ src/
   brain.js            prompt, base de connaissances, règles, analyse JSON
   ai/                 Gemini, Claude (SDK officiel), fournisseurs compatibles OpenAI, relais automatique
   facebook/graph.js   API Graph (réponses, MP privés, like, masquage, OAuth)
-  store.js            stockage JSON (data/db.json) ou Supabase (supabase.js)
+  store.js            stockage : data/db.json, ou base distante (remotes.js : MongoDB, Postgres, Upstash, Supabase)
 public/               tableau de bord (HTML/CSS/JS, sans framework)
 test/                 tests (node --test)
 ```

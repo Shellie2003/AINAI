@@ -59,3 +59,29 @@ test('Supabase : requêtes REST correctes', async (t) => {
   assert.match(calls[1].init.headers.prefer, /merge-duplicates/);
   assert.equal(JSON.parse(calls[1].init.body).data.a, 1);
 });
+
+test('choix automatique de la base selon les variables d’environnement', async () => {
+  const { createRemote } = await import('../src/remotes.js');
+  assert.equal(createRemote({}), null);
+  assert.equal(createRemote({ DATABASE_URL: 'mongodb+srv://u:p@c.mongodb.net/' }).name, 'MongoDB');
+  assert.equal(createRemote({ DATABASE_URL: 'postgresql://u:p@ep-x.neon.tech/db?sslmode=require' }).name, 'Postgres');
+  assert.equal(createRemote({ UPSTASH_REDIS_REST_URL: 'https://x.upstash.io', UPSTASH_REDIS_REST_TOKEN: 't' }).name, 'Upstash Redis');
+  assert.equal(createRemote({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SECRET_KEY: 'k' }).name, 'Supabase');
+  assert.throws(() => createRemote({ DATABASE_URL: 'mysql://x' }), /postgres/);
+});
+
+test('Upstash : SET / GET via l’API REST', async (t) => {
+  const { upstashRemote } = await import('../src/remotes.js');
+  let stored = null;
+  t.mock.method(globalThis, 'fetch', async (_url, init) => {
+    assert.equal(init.headers.authorization, 'Bearer tok');
+    const [cmd, key, value] = JSON.parse(init.body);
+    assert.equal(key, 'ainai:main');
+    if (cmd === 'SET') stored = value;
+    return Response.json({ result: cmd === 'SET' ? 'OK' : stored });
+  });
+  const r = upstashRemote('https://x.upstash.io', 'tok');
+  assert.equal(await r.load(), null);
+  await r.save({ leads: [1] });
+  assert.deepEqual(await r.load(), { leads: [1] });
+});

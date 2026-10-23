@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { randomId } from './crypto.js';
-import { supabaseRemote } from './supabase.js';
+import { createRemote } from './remotes.js';
 
 // Base de données JSON simple : un seul propriétaire de page, quelques milliers d'événements.
 const FILE = path.join(config.dataDir, 'db.json');
@@ -112,7 +112,7 @@ class Store {
     this.dirty = true;
     if (this.timer) return;
     // Écritures distantes regroupées pour rester dans les quotas gratuits
-    this.timer = setTimeout(() => this.flush(), this.remote ? 2000 : 300);
+    this.timer = setTimeout(() => this.flush(), this.remote ? 5000 : 300);
   }
 
   compact() {
@@ -207,8 +207,8 @@ class Store {
 
 function createStore() {
   if (process.env.NODE_ENV === 'test') return new Store();
-  if (config.supabaseUrl && config.supabaseKey) return new Store({ remote: supabaseRemote(config.supabaseUrl, config.supabaseKey) });
-  return new Store({ file: FILE });
+  const remote = createRemote();
+  return remote ? new Store({ remote }) : new Store({ file: FILE });
 }
 
 export const store = createStore();

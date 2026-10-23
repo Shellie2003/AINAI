@@ -177,7 +177,7 @@ function publicState(req) {
     pages: store.data.pages.map(({ accessToken, ...p }) => ({ ...p, hasToken: Boolean(accessToken) })),
     pendingCount: store.data.queue.filter((q) => q.status === 'pending').length,
     storage: store.remote ? store.remote.name : 'fichier local',
-    // Render gratuit n'a pas de disque permanent : sans Supabase, tout serait perdu au redémarrage
+    // Render gratuit n'a pas de disque permanent : sans base distante, tout serait perdu au redémarrage
     ephemeralStorage: !store.remote && Boolean(process.env.RENDER) && !config.dataDir.startsWith('/var/data'),
   };
 }
@@ -383,7 +383,8 @@ export function startKeepAlive(url, everyMs = 10 * 60_000) {
   const timer = setInterval(() => {
     fetch(`${url}/healthz`, { signal: AbortSignal.timeout(15000) }).catch(() => {});
   }, everyMs);
-  // Supabase gratuit met en pause un projet inactif 7 jours : une lecture par jour suffit à l'éviter.
+  // Les bases gratuites (Supabase, Neon, Atlas…) mettent en veille ou suppriment les projets inactifs :
+  // une lecture par jour suffit à rester actif.
   const daily = store.remote && setInterval(() => store.remote.load().catch(() => {}), 24 * 3600_000);
   timer.unref();
   daily?.unref();
