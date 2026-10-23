@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AINAI – Assistante IA pour votre page Facebook</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="auth" class="auth hidden">
+    <form id="authForm" class="card auth-card">
+      <div class="brand big">🤖 AINAI</div>
+      <p class="muted" id="authHint">Connectez-vous à votre assistante.</p>
+      <input type="password" id="authPassword" placeholder="Mot de passe" autocomplete="current-password" required />
+      <button class="btn primary" type="submit" id="authBtn">Se connecter</button>
+      <p class="error" id="authError"></p>
+    </form>
+  </div>
+
+  <div id="app" class="layout hidden">
+    <aside class="sidebar">
+      <div class="brand">🤖 AINAI</div>
+      <nav id="nav">
+        <a data-tab="home">🏠 Accueil</a>
+        <a data-tab="facebook">📘 Facebook</a>
+        <a data-tab="ai">🧠 Moteurs IA</a>
+        <a data-tab="persona">🎭 Personnalité</a>
+        <a data-tab="knowledge">📚 Connaissances</a>
+        <a data-tab="automation">⚙️ Automatisation</a>
+        <a data-tab="queue">📝 À valider <span class="badge" id="queueBadge"></span></a>
+        <a data-tab="conversations">💬 Conversations</a>
+        <a data-tab="leads">🎯 Prospects</a>
+        <a data-tab="playground">🧪 Simulateur</a>
+        <a data-tab="logs">📜 Journal</a>
+      </nav>
+      <button class="btn ghost small" id="logoutBtn">Se déconnecter</button>
+    </aside>
+    <main id="main"></main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
