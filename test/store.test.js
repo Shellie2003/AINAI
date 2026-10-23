@@ -85,3 +85,9 @@ test('Upstash : SET / GET via l’API REST', async (t) => {
   await r.save({ leads: [1] });
   assert.deepEqual(await r.load(), { leads: [1] });
 });
+
+test('« - » compte comme une variable vide', async () => {
+  const { createRemote } = await import('../src/remotes.js');
+  assert.equal(createRemote({ DATABASE_URL: '-', UPSTASH_REDIS_REST_URL: '-', SUPABASE_URL: ' - ' }), null);
+  assert.equal(createRemote({ DATABASE_URL: 'mongodb+srv://a', SUPABASE_URL: '-' }).name, 'MongoDB');
+});

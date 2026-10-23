@@ -26,6 +26,8 @@ Un **mini-site** (tableau de bord) permet de tout relier sans écrire de code : 
 
 ## 🚀 Installation
 
+> 📘 **Guide complet pas à pas (Gemini, MongoDB Atlas / Neon / Upstash, Render, Facebook, dépannage) : [GUIDE.md](GUIDE.md)**
+
 ### 1. Lancer le serveur
 
 Il faut **Node.js 20 ou plus récent**.

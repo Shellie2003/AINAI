@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRemote } from './remotes.js';
 
 // Lecture minimale d'un fichier .env (sans dépendance externe)
 function loadDotEnv(file = path.resolve('.env')) {
@@ -24,12 +25,7 @@ export const config = {
 };
 
 // Base de données distante configurée (Postgres, MongoDB, Upstash ou Supabase) ?
-export const usesRemoteDb = Boolean(
-  process.env.DATABASE_URL ||
-    process.env.MONGODB_URI ||
-    (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) ||
-    (process.env.SUPABASE_URL && (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)),
-);
+export const usesRemoteDb = createRemote() !== null;
 
 // Sans disque permanent, une clé générée automatiquement serait perdue à chaque redémarrage
 // et les clés API chiffrées deviendraient illisibles.

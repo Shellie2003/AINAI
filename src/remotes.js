@@ -86,8 +86,18 @@ export function upstashRemote(url, token) {
   };
 }
 
+// « - » ou « aucun » = variable laissée vide (Render peut exiger une valeur pour chaque variable).
+const PLACEHOLDERS = new Set(['', '-', 'aucun', 'none', 'vide']);
+export const cleanEnv = (env) =>
+  Object.fromEntries(
+    Object.entries(env)
+      .map(([k, v]) => [k, String(v ?? '').trim()]) // espaces copiés-collés par erreur
+      .filter(([, v]) => !PLACEHOLDERS.has(v.toLowerCase())),
+  );
+
 /** Choisit la base selon les variables d'environnement présentes (null = fichier local). */
-export function createRemote(env = process.env) {
+export function createRemote(rawEnv = process.env) {
+  const env = cleanEnv(rawEnv);
   const dbUrl = env.DATABASE_URL || env.MONGODB_URI || '';
   if (/^mongodb(\+srv)?:\/\//.test(dbUrl)) return mongoRemote(dbUrl);
   if (/^postgres(ql)?:\/\//.test(dbUrl)) return postgresRemote(dbUrl);
