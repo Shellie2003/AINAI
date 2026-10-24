@@ -137,11 +137,14 @@ app.post('/api/facebook/configure-webhook', requireAuth, wrap(async (req, res) =
 app.post('/api/pages/:id/activate', requireAuth, wrap(async (req, res) => {
   const page = store.data.pages.find((p) => p.id === req.params.id);
   if (!page) throw new Error('Page introuvable');
-  await fb.subscribePage(page.id, decrypt(page.accessToken));
-  Object.assign(page, { active: true, subscribed: true });
-  store.log('info', `🟢 Assistante activée sur « ${page.name} »`);
+  const sub = await fb.subscribePage(page.id, decrypt(page.accessToken));
+  Object.assign(page, { active: true, subscribed: true, comments: sub.comments });
+  const warning = sub.comments
+    ? ''
+    : 'Messages privés activés ✅. Commentaires désactivés : le jeton n’a pas la permission pages_manage_metadata. Importez un jeton qui l’inclut (voir le guide), puis réactivez la page.';
+  store.log(sub.comments ? 'info' : 'warn', `🟢 Assistante activée sur « ${page.name} »${warning ? ` – ${warning}` : ''}`);
   store.save();
-  res.json({ ok: true });
+  res.json({ ok: true, comments: sub.comments, warning });
 }));
 
 app.post('/api/pages/:id/deactivate', requireAuth, wrap(async (req, res) => {

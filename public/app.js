@@ -22,7 +22,7 @@ function toast(msg, error = false) {
   t.textContent = msg;
   t.className = `toast show${error ? ' error' : ''}`;
   clearTimeout(t.timer);
-  t.timer = setTimeout(() => (t.className = 'toast'), 3500);
+  t.timer = setTimeout(() => (t.className = 'toast'), Math.max(3500, msg.length * 60));
 }
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -245,10 +245,14 @@ async function facebook(params) {
     const el = h(`<div class="list-item spread">
       <div class="row">${p.picture ? `<img src="${esc(p.picture)}" width="40" height="40" style="border-radius:50%" alt="" />` : '📄'}
         <div><b>${esc(p.name)}</b><div class="small muted">${esc(p.category || '')} · ID ${esc(p.id)}</div></div></div>
-      <div class="row">${p.active ? '<span class="pill ok">● Active</span>' : '<span class="pill">Inactive</span>'}
+      <div class="row">${p.active ? `<span class="pill ok">● Active</span>${p.comments === false ? '<span class="pill warn" title="Le jeton n’a pas la permission pages_manage_metadata">MP seulement</span>' : ''}` : '<span class="pill">Inactive</span>'}
         <button class="btn small ${p.active ? '' : 'primary'}" data-act>${p.active ? 'Désactiver' : 'Activer l’assistante'}</button>
         <button class="btn small danger" data-del>Retirer</button></div></div>`);
-    el.querySelector('[data-act]').onclick = (e) => act(e.target, async () => { await api(`/api/pages/${p.id}/${p.active ? 'deactivate' : 'activate'}`, { method: 'POST' }); route(); });
+    el.querySelector('[data-act]').onclick = (e) => act(e.target, async () => {
+      const r = await api(`/api/pages/${p.id}/${p.active ? 'deactivate' : 'activate'}`, { method: 'POST' });
+      await route();
+      if (r.warning) toast(r.warning, true);
+    });
     el.querySelector('[data-del]').onclick = (e) => confirm(`Retirer « ${p.name} » ?`) && act(e.target, async () => { await api(`/api/pages/${p.id}`, { method: 'DELETE' }); route(); });
     box.append(el);
   }

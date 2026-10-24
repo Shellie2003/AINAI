@@ -54,12 +54,23 @@ export async function listPages(userToken) {
   return data.data || [];
 }
 
-export const subscribePage = (pageId, pageToken) =>
-  graph(`${pageId}/subscribed_apps`, {
-    method: 'POST',
-    token: pageToken,
-    params: { subscribed_fields: 'feed,messages,messaging_postbacks,message_echoes' },
-  });
+const MESSAGE_FIELDS = 'messages,messaging_postbacks,message_echoes';
+
+/**
+ * Abonne la page aux messages et aux commentaires (feed). Si le jeton n'a pas la permission
+ * des commentaires (cas des jetons générés dans l'écran Messenger), on active au moins les messages privés.
+ * @returns {{ comments: boolean, reason?: string }}
+ */
+export async function subscribePage(pageId, pageToken) {
+  try {
+    await graph(`${pageId}/subscribed_apps`, { method: 'POST', token: pageToken, params: { subscribed_fields: `feed,${MESSAGE_FIELDS}` } });
+    return { comments: true };
+  } catch (err) {
+    if (!/feed/i.test(err.message)) throw err;
+    await graph(`${pageId}/subscribed_apps`, { method: 'POST', token: pageToken, params: { subscribed_fields: MESSAGE_FIELDS } });
+    return { comments: false, reason: err.message };
+  }
+}
 
 export const unsubscribePage = (pageId, pageToken) => graph(`${pageId}/subscribed_apps`, { method: 'DELETE', token: pageToken });
 
