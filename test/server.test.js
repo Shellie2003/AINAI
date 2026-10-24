@@ -38,7 +38,7 @@ test('API protégée par mot de passe, clés jamais renvoyées en clair', async 
 
   await fetch(`${base}/api/providers`, { method: 'POST', headers, body: JSON.stringify({ type: 'gemini', apiKey: 'AIzaSecretKey123456' }) });
   const state = await (await fetch(`${base}/api/state`, { headers })).json();
-  assert.equal(state.settings.providers[0].model, 'gemini-2.5-flash');
+  assert.equal(state.settings.providers[0].model, 'gemini-3.8-flash');
   assert.ok(!JSON.stringify(state).includes('AIzaSecretKey123456'));
   assert.ok(!JSON.stringify(state).includes('appsecret'));
 

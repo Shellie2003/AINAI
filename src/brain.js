@@ -180,5 +180,5 @@ export async function think(settings, { channel, history, userName, postContext,
   result.lead.email ||= contacts.email;
   const max = Number(settings.persona.maxLength) || 600;
   if (result.reply.length > max * 1.5) result.reply = `${result.reply.slice(0, max * 1.5 - 1)}…`;
-  return { ...result, provider: out.provider, model: out.model, ms: out.ms, fallbackErrors: out.errors };
+  return { ...result, provider: out.provider, model: out.model, ms: out.ms, fallbackErrors: out.errors, modelChanged: out.modelChanged };
 }

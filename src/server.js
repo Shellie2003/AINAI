@@ -261,7 +261,12 @@ app.post('/api/providers/:id/test', requireAuth, wrap(async (req, res) => {
     maxTokens: 1024,
   });
   if (out.errors.length) throw new Error(out.errors.join(' | '));
-  res.json({ ok: true, text: out.text, ms: out.ms });
+  if (out.modelChanged) {
+    p.model = out.modelChanged.to;
+    store.log('warn', `🔄 Modèle ${out.modelChanged.from} retiré : remplacé automatiquement par ${out.modelChanged.to}`);
+    store.save();
+  }
+  res.json({ ok: true, text: out.text, ms: out.ms, model: out.model, modelChanged: out.modelChanged });
 }));
 
 app.get('/api/providers/:id/models', requireAuth, wrap(async (req, res) => {

@@ -56,3 +56,32 @@ test('Gemini : envoie le prompt système, les médias et ignore les pensées', a
 test('erreur claire quand aucune IA n’est configurée', async () => {
   await assert.rejects(generateWithFallback([], { system: '', messages: [] }), /Aucune IA/);
 });
+
+test('modèle Gemini retiré (404) : bascule sur le modèle conseillé par Google et le retient', async (t) => {
+  const urls = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    urls.push(String(url));
+    if (String(url).includes('gemini-2.5-flash:')) {
+      return Response.json({ error: { message: 'This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features.' } }, { status: 404 });
+    }
+    return Response.json({ candidates: [{ content: { parts: [{ text: 'Salut' }] } }] });
+  });
+  const provider = { id: 'old', type: 'gemini', apiKey: encrypt('k'), model: 'gemini-2.5-flash' };
+  const out = await generateWithFallback([provider], { system: 's', messages: [{ role: 'user', text: 'a' }] });
+  assert.equal(out.text, 'Salut');
+  assert.equal(out.model, 'gemini-3.8-flash');
+  assert.equal(provider.model, 'gemini-3.8-flash'); // mémorisé
+  assert.match(urls[1], /gemini-3\.8-flash:generateContent/);
+});
+
+test('modèle retiré sans suggestion : choix du meilleur « flash » disponible', async (t) => {
+  const { pickBestModel } = await import('../src/ai/gemini.js');
+  assert.equal(pickBestModel(['gemini-3.8-flash-lite', 'gemini-3.8-flash', 'gemini-4.0-flash-preview', 'gemini-3.5-flash', 'gemini-3.8-pro', 'gemini-3.8-flash-image'], 'x'), 'gemini-3.8-flash');
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).includes('/models?')) return Response.json({ models: [{ name: 'models/gemini-3.5-flash', supportedGenerationMethods: ['generateContent'] }, { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }] });
+    if (String(url).includes('ancien:')) return Response.json({ error: { message: 'not found' } }, { status: 404 });
+    return Response.json({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] });
+  });
+  const out = await generateWithFallback([{ id: 'p2', type: 'gemini', apiKey: encrypt('k'), model: 'ancien' }], { system: 's', messages: [{ role: 'user', text: 'a' }] });
+  assert.equal(out.model, 'gemini-3.8-flash');
+});

@@ -302,7 +302,9 @@ async function ai() {
     q('[data-save]').onclick = (e) => act(e.target, async () => { await api(`/api/providers/${p.id}`, { method: 'PUT', body: { model: q('[data-model]').value, apiKey: q('[data-key]').value } }); route(); }, 'Enregistré ✔');
     q('[data-toggle]').onclick = (e) => act(e.target, async () => { await api(`/api/providers/${p.id}`, { method: 'PUT', body: { enabled: !p.enabled } }); route(); });
     q('[data-del]').onclick = (e) => confirm('Supprimer cette IA ?') && act(e.target, async () => { await api(`/api/providers/${p.id}`, { method: 'DELETE' }); route(); });
-    q('[data-test]').onclick = (e) => act(e.target, async () => { const r = await api(`/api/providers/${p.id}/test`, { method: 'POST' }); q('[data-out]').textContent = `✅ ${r.ms} ms – « ${r.text} »`; });
+    q('[data-test]').onclick = (e) => act(e.target, async () => { const r = await api(`/api/providers/${p.id}/test`, { method: 'POST' }); q('[data-out]').textContent = `✅ ${r.ms} ms – « ${r.text} »`;
+      if (r.modelChanged) { toast(`Modèle ${r.modelChanged.from} retiré : remplacé par ${r.modelChanged.to}`); q('[data-model]').value = r.model; }
+    });
     q('[data-models]').onclick = (e) => act(e.target, async () => {
       const r = await api(`/api/providers/${p.id}/models`);
       q('datalist').innerHTML = r.models.map((m) => `<option value="${esc(m)}">`).join('');

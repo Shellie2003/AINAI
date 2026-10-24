@@ -71,7 +71,11 @@ export async function generateWithFallback(providers, request, { timeoutMs = 450
         baseUrl: p.baseUrl || impl.defaultBaseUrl,
         signal: AbortSignal.timeout(timeoutMs),
       });
-      return { ...out, provider: p.name || impl.label, providerId: p.id, model: p.model || impl.defaultModel, ms: Date.now() - started, errors };
+      if (out.modelChanged) {
+        // Le modèle a été retiré par le fournisseur : on retient le remplaçant pour les prochaines fois
+        p.model = out.modelChanged.to;
+      }
+      return { ...out, provider: p.name || impl.label, providerId: p.id, model: out.model || p.model || impl.defaultModel, ms: Date.now() - started, errors };
     } catch (err) {
       if (err.status === 429) cooldown.set(p.id, Date.now() + 60_000);
       errors.push(`${p.name || p.type}: ${err.message}`);

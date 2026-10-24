@@ -243,6 +243,7 @@ function track(item) {
   if (r.provider) store.bumpStat(`provider_${r.provider}`);
   if (r.needsHuman) store.bumpStat('needs_human');
   if (r.fallbackErrors?.length) store.log('warn', `IA de secours utilisée (${r.provider}) : ${r.fallbackErrors.join(' | ')}`);
+  if (r.modelChanged) store.log('warn', `🔄 Modèle ${r.modelChanged.from} retiré par le fournisseur : remplacé automatiquement par ${r.modelChanged.to}`);
   const { phone, email } = r.lead || {};
   if (phone || email || r.intent === 'achat') saveLead(item, r.lead);
 }
