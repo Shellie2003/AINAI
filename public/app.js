@@ -268,7 +268,7 @@ async function ai() {
         <div id="pBaseWrap"><label>URL de l’API <span class="muted">(compatibles OpenAI)</span></label><input id="pBase" /></div>
       </div>
       <p><button class="btn primary" id="pAdd">Ajouter</button></p>
-      <p class="small muted">💡 <b>Gemini</b> : clé gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>, lit aussi les photos et messages vocaux. <b>Groq</b> et <b>OpenRouter</b> offrent aussi des modèles gratuits : parfaits en secours. <b>Claude</b> (Anthropic) est payant mais excellent en rédaction.</p>
+      <p class="small muted">💡 <b>Gemini</b> : clé gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>, lit aussi les photos et messages vocaux. Secours gratuits conseillés : <b>Groq</b>, <b>Cerebras</b>, <b>OpenRouter</b> (modèle <code>openrouter/free</code>) et <b>Mistral</b>. Si un modèle est retiré par le fournisseur, l’assistante en choisit un autre toute seule. <b>Claude</b> (Anthropic) est payant mais excellent en rédaction.</p>
     </div>`));
 
   const sync = () => {

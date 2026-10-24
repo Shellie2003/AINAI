@@ -22,9 +22,25 @@ Gardez un **bloc-notes** ouvert : vous allez y copier plusieurs clés. Ne les pa
 3. Cliquez sur **Create API key**. Si on vous demande un projet Google Cloud, choisissez-en un ou laissez-le créer.
 4. Copiez la clé (elle commence par `AIza…`) dans votre bloc-notes : **CLÉ GEMINI**.
 
-**Facultatif mais conseillé : une IA de secours gratuite (Groq)**
-1. Ouvrez <https://console.groq.com/keys> et créez un compte.
-2. Cliquez sur **Create API Key**, donnez un nom (par exemple `ainai`), puis copiez la clé (`gsk_…`) : **CLÉ GROQ**.
+**Fortement conseillé : une ou deux IA de secours gratuites.** Le Gemini gratuit est parfois saturé (erreur 503) : sans IA de secours, les clients n'ont pas de réponse pendant ce temps. Voir la section **IA de secours** juste en dessous.
+
+### IA de secours (gratuites, sans carte bancaire)
+
+Ajoutez-les dans l'onglet **🧠 Moteurs IA** : **Fournisseur** → collez la clé → **Ajouter** → **Tester**. Le champ « Modèle » se remplit tout seul ; ne le changez pas. Ordre conseillé (glisser-déposer) : **1. Gemini → 2. Groq → 3. Cerebras → 4. OpenRouter**.
+
+| IA | Où obtenir la clé | Modèle par défaut | À savoir |
+|---|---|---|---|
+| **Groq** | <https://console.groq.com/keys> → **Create API Key** (`gsk_…`) | `llama-3.3-70b-versatile` | Très rapide. Limité à environ 1 000 requêtes par jour pour ce modèle. |
+| **Cerebras** | <https://cloud.cerebras.ai> → **API Keys** → **Generate API Key** (`csk-…`) | `gpt-oss-120b` | Très rapide. En gratuit, la conversation est limitée en longueur : il convient comme secours, avec une base de connaissances courte. |
+| **OpenRouter** | <https://openrouter.ai/keys> → **Create Key** (`sk-or-…`) | `openrouter/free` | Choisit à chaque fois un modèle gratuit disponible. Limité à environ 50 requêtes par jour sans crédit acheté. |
+| **Mistral** | <https://console.mistral.ai> → choisir le plan **Experiment** (gratuit, vérification par téléphone) → **API Keys** | `mistral-small-latest` | IA européenne, bonne en français. |
+| **Claude** (payant) | <https://console.anthropic.com/settings/keys> | `claude-opus-5-5` | Excellente rédaction. `claude-haiku-5-5` est bien moins cher. |
+
+**Comment ça marche :**
+- Si une IA échoue (saturée, quota du jour atteint, panne), la suivante répond automatiquement. Le client ne voit rien.
+- Une IA qui renvoie « quota dépassé » est mise de côté pendant 1 minute.
+- Si un fournisseur retire un modèle, l'assistante en choisit un autre dans sa liste et le retient. Un message 🔄 apparaît dans le Journal.
+- Gemini reste n°1 : c'est la seule à comprendre les **photos et les messages vocaux**. Quand un client envoie une photo, les IA qui savent lire les images passent en premier.
 
 ---
 

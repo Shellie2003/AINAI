@@ -115,3 +115,37 @@ test('Gemini surchargé (503) : nouvel essai, puis modèle de dépannage', async
   assert.equal(out.model, 'gemini-3.8-flash-lite');
   assert.equal(p2.model, 'gemini-3.8-flash');
 });
+
+test('Groq : modèle retiré → remplaçant choisi dans sa liste et mémorisé', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const u = String(url);
+    if (u.endsWith('/models')) return Response.json({ data: [{ id: 'whisper-large-v3' }, { id: 'llama-3.1-8b-instant' }, { id: 'openai/gpt-oss-120b' }, { id: 'meta-llama/llama-guard-4-12b' }] });
+    const body = JSON.parse(init.body);
+    if (body.model === 'llama-3.3-70b-versatile') return Response.json({ error: { message: 'The model `llama-3.3-70b-versatile` has been decommissioned', code: 'model_decommissioned' } }, { status: 400 });
+    return Response.json({ choices: [{ message: { content: `{"reply":"via ${body.model}"}` } }] });
+  });
+  const groq = { id: 'g1', type: 'groq', apiKey: encrypt('gsk'), model: 'llama-3.3-70b-versatile' };
+  const out = await generateWithFallback([groq], { system: 's', messages: [{ role: 'user', text: 'a' }], json: true });
+  assert.equal(out.model, 'openai/gpt-oss-120b');
+  assert.equal(groq.model, 'openai/gpt-oss-120b');
+});
+
+test('mode JSON refusé par un modèle : nouvel essai sans', async (t) => {
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async (_url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.response_format) return Response.json({ error: { message: 'response_format json_object is not supported by this model' } }, { status: 400 });
+    return Response.json({ choices: [{ message: { content: '{"reply":"ok"}' } }] });
+  });
+  const out = await generateWithFallback([{ id: 'c1', type: 'cerebras', apiKey: encrypt('k') }], { system: 's', messages: [{ role: 'user', text: 'a' }], json: true });
+  assert.equal(out.text, '{"reply":"ok"}');
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].model, 'gpt-oss-120b');
+  assert.equal(bodies[0].max_tokens, 2048);
+});
+
+test('choix du remplaçant OpenRouter : uniquement des modèles gratuits', async () => {
+  const { pickOpenAiModel } = await import('../src/ai/openai.js');
+  assert.equal(pickOpenAiModel(['openai/gpt-oss-120b', 'meta-llama/llama-3.3-70b-instruct:free', 'x/y:free'], 'z', 'openrouter'), 'meta-llama/llama-3.3-70b-instruct:free');
+});
