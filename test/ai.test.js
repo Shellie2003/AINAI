@@ -85,3 +85,33 @@ test('modèle retiré sans suggestion : choix du meilleur « flash » disponible
   const out = await generateWithFallback([{ id: 'p2', type: 'gemini', apiKey: encrypt('k'), model: 'ancien' }], { system: 's', messages: [{ role: 'user', text: 'a' }] });
   assert.equal(out.model, 'gemini-3.8-flash');
 });
+
+test('Gemini surchargé (503) : nouvel essai, puis modèle de dépannage', async (t) => {
+  const { geminiRetry } = await import('../src/ai/gemini.js');
+  geminiRetry.delays = [0, 0];
+  // 1) 503 passager : le 2e essai réussit
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return calls === 1
+      ? Response.json({ error: { message: 'high demand' } }, { status: 503 })
+      : Response.json({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] });
+  });
+  const p1 = { id: 'r1', type: 'gemini', apiKey: encrypt('k'), model: 'gemini-3.8-flash' };
+  assert.equal((await generateWithFallback([p1], { system: 's', messages: [{ role: 'user', text: 'a' }] })).text, 'ok');
+  assert.equal(calls, 2);
+
+  // 2) surcharge durable : bascule sur un autre modèle flash, sans changer le modèle enregistré
+  t.mock.restoreAll();
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const u = String(url);
+    if (u.includes('/models?')) return Response.json({ models: ['gemini-3.8-flash', 'gemini-3.8-flash-lite', 'gemini-3.8-pro'].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) });
+    if (u.includes('gemini-3.8-flash:')) return Response.json({ error: { message: 'high demand' } }, { status: 503 });
+    return Response.json({ candidates: [{ content: { parts: [{ text: 'secours' }] } }] });
+  });
+  const p2 = { id: 'r2', type: 'gemini', apiKey: encrypt('k'), model: 'gemini-3.8-flash' };
+  const out = await generateWithFallback([p2], { system: 's', messages: [{ role: 'user', text: 'a' }] });
+  assert.equal(out.text, 'secours');
+  assert.equal(out.model, 'gemini-3.8-flash-lite');
+  assert.equal(p2.model, 'gemini-3.8-flash');
+});
