@@ -1,6 +1,6 @@
 # Déploiement 100 % gratuit sur Render (https://render.com) + une base de données gratuite.
-# Le plan gratuit de Render n'a pas de disque permanent : renseignez DATABASE_URL (MongoDB Atlas, Neon…)
-# ou bien UPSTASH_REDIS_REST_URL/TOKEN, ou SUPABASE_URL/SUPABASE_SECRET_KEY. Laissez les autres vides.
+# Le plan gratuit de Render n'a pas de disque permanent : renseignez UPSTASH_REDIS_REST_URL/TOKEN (conseillé),
+# ou DATABASE_URL (Neon, MongoDB Atlas), ou SUPABASE_URL/SUPABASE_SECRET_KEY. Mettez « - » dans les autres.
 services:
   - type: web
     name: ainai

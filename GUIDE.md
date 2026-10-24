@@ -4,7 +4,7 @@ Durée : 30 à 45 minutes la première fois. Aucun paiement n'est nécessaire.
 
 Ordre des étapes :
 1. Clé IA Gemini
-2. Base de données (MongoDB Atlas, ou Neon / Upstash)
+2. Base de données (Upstash, ou Neon / MongoDB Atlas)
 3. Render (mise en ligne)
 4. Premier accès au tableau de bord
 5. Application Facebook
@@ -30,45 +30,49 @@ Gardez un **bloc-notes** ouvert : vous allez y copier plusieurs clés. Ne les pa
 
 ## Étape 2 — Base de données gratuite
 
-Choisissez **une seule** option. MongoDB Atlas est conseillée.
+Choisissez **une seule** option. **Upstash est conseillée** : c'est la plus simple (aucun cluster ni réseau à configurer, pas de mise en veille) et AINAI y compresse ses données pour rester largement dans le gratuit.
 
-### Option A — MongoDB Atlas ⭐
+### Option A — Upstash Redis ⭐ (conseillée)
 
-1. Ouvrez <https://www.mongodb.com/cloud/atlas/register> et créez un compte (Google, ou e-mail).
-2. Répondez au questionnaire d'accueil comme vous voulez : ça n'a pas d'importance.
-3. Sur l'écran **Deploy your cluster** :
-   - choisissez **M0 (Free)** ;
-   - Provider : **AWS** ;
-   - Region : **Frankfurt (eu-central-1)**, la même région que Render, pour plus de rapidité ;
+1. Ouvrez <https://console.upstash.com> et créez un compte (Google, GitHub ou e-mail). Aucune carte bancaire n'est demandée.
+2. Dans le menu **Redis**, cliquez sur **Create Database** :
    - Name : `ainai` ;
-   - cliquez sur **Create Deployment**.
-4. Une fenêtre **Connect to ainai** s'ouvre :
-   - Username : `ainai` ;
-   - Password : cliquez sur **Autogenerate Secure Password**. Il ne contient alors que des lettres et des chiffres, sans `@ : / ? #` qui casseraient l'adresse. Copiez-le dans votre bloc-notes : **MOT DE PASSE MONGO** ;
-   - cliquez sur **Create Database User**.
-5. Cliquez sur **Choose a connection method** → **Drivers**. Laissez « Node.js ». Copiez l'adresse affichée, qui ressemble à :
-   ```
-   mongodb+srv://ainai:<db_password>@ainai.ab1cd.mongodb.net/?retryWrites=true&w=majority&appName=ainai
-   ```
-6. Dans votre bloc-notes, **remplacez `<db_password>`** (chevrons compris) par votre mot de passe. Le résultat est votre **DATABASE_URL**.
-7. Autorisez Render à se connecter : dans le menu de gauche, **Security → Network Access → Add IP Address**. Cliquez sur **Allow access from anywhere** (`0.0.0.0/0`), puis sur **Confirm**.
-   > Render gratuit n'a pas d'adresse IP fixe : c'est nécessaire. La sécurité repose sur le mot de passe.
+   - Primary Region : **Europe (Frankfurt)**, ou la région européenne la plus proche proposée ;
+   - plan : **Free** ;
+   - cliquez sur **Create**. Si une option « Eviction » est proposée, **laissez-la désactivée** : elle supprimerait des données.
+3. Sur la page de la base, ouvrez l'onglet ou la section **REST API** (parfois sous **Connect → REST**). Copiez dans votre bloc-notes :
+   - `UPSTASH_REDIS_REST_URL` : l'adresse en `https://….upstash.io` ;
+   - `UPSTASH_REDIS_REST_TOKEN` : le jeton (cliquez sur l'œil 👁 pour l'afficher). N'utilisez **pas** le jeton « Read-Only ».
 
-✅ Rien d'autre à faire : AINAI crée lui-même sa base `ainai` au premier démarrage.
+✅ C'est tout. Sur Render (étape 3), vous remplirez ces deux variables et laisserez `DATABASE_URL` vide ou à `-`.
+
+Le gratuit d'Upstash compte 256 Mo, 500 000 commandes et 10 Go de transfert par mois. AINAI écrit au plus une fois toutes les 10 secondes, données compressées, ce qui couvre largement une page active.
 
 ### Option B — Neon (Postgres)
 
-1. Ouvrez <https://neon.tech> → **Sign up**.
-2. Créez un projet : nom `ainai`, région **AWS Europe Central (Frankfurt)**.
+1. Ouvrez <https://neon.tech> → **Sign up**. Aucune carte bancaire n'est demandée.
+2. Créez un projet : nom `ainai`, Postgres en version par défaut, région **AWS Europe Central (Frankfurt)**.
 3. Sur le tableau de bord du projet, cliquez sur **Connect**. Copiez la *connection string* qui commence par `postgresql://` et se termine par `?sslmode=require` : c'est votre **DATABASE_URL**.
+   - Si vous voyez une case **Connection pooling**, vous pouvez la laisser cochée : les deux fonctionnent.
 
-### Option C — Upstash (Redis)
+✅ AINAI crée lui-même sa table au premier démarrage.
 
-1. Ouvrez <https://console.upstash.com> et créez un compte.
-2. **Create Database** → type **Redis**, nom `ainai`, région **Frankfurt**, plan **Free** → **Create**.
-3. Descendez jusqu'à la section **REST API**. Copiez :
-   - `UPSTASH_REDIS_REST_URL` (`https://….upstash.io`) ;
-   - `UPSTASH_REDIS_REST_TOKEN`.
+> Neon gratuit endort la base après 5 minutes sans activité. AINAI ferme ses connexions inutilisées pour la laisser dormir et ne pas épuiser les heures de calcul gratuites (environ 100 par mois). Pour une page qui reçoit des messages toute la journée sans interruption, préférez Upstash.
+
+### Option C — MongoDB Atlas
+
+D'après la documentation officielle, MongoDB propose toujours un cluster gratuit (**M0 / Free**), mais l'écran de création change souvent. Si vous ne le voyez pas :
+- sur l'écran **Create a cluster / Deploy your cluster**, cherchez la carte **Free** (parfois à droite de **Flex**, qui, elle, est payante) ;
+- Atlas n'autorise **qu'un seul cluster gratuit par projet**. Si vous en avez déjà un, créez un **nouveau projet** (menu en haut à gauche → **New Project**), puis créez le cluster dedans ;
+- un cluster gratuit sans aucune connexion pendant 30 jours est mis en pause ; AINAI s'y connecte tous les jours.
+
+Ensuite :
+1. Choisissez **Free**, provider **AWS**, région **Frankfurt**, nom `ainai` → **Create Deployment**.
+2. Créez l'utilisateur : nom `ainai`, **Autogenerate Secure Password** (copiez-le) → **Create Database User**.
+3. **Choose a connection method → Drivers → Node.js** : copiez l'adresse `mongodb+srv://ainai:<db_password>@…` et remplacez `<db_password>` par votre mot de passe. C'est votre **DATABASE_URL**.
+4. **Security → Network Access → Add IP Address → Allow access from anywhere** (`0.0.0.0/0`) → **Confirm**.
+
+Si le gratuit reste introuvable, prenez Upstash (option A).
 
 ### Option D — Supabase (projet existant)
 
@@ -90,8 +94,8 @@ La limite du plan gratuit porte sur le nombre de projets, pas de tables : vous p
    |---|---|
    | `ADMIN_PASSWORD` | un mot de passe solide pour **votre** tableau de bord |
    | `PUBLIC_URL` | laissez vide pour l'instant (étape 3.8) |
-   | `DATABASE_URL` | votre adresse MongoDB ou Neon (étape 2) |
-   | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | seulement si vous avez choisi Upstash |
+   | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | si vous avez choisi Upstash (conseillé) |
+   | `DATABASE_URL` | si vous avez choisi Neon ou MongoDB : leur adresse (étape 2) |
    | `SUPABASE_URL` / `SUPABASE_SECRET_KEY` | seulement si vous avez choisi Supabase |
 
    Laissez vides les variables des bases que vous n'utilisez pas. Si Render exige une valeur, mettez simplement `-` : AINAI la considère comme vide.
@@ -102,7 +106,7 @@ La limite du plan gratuit porte sur le nombre de projets, pas de tables : vous p
    - Cliquez sur **Save, rebuild, and deploy**.
 9. Vérifiez dans l'onglet **Logs** que vous voyez :
    ```
-   [store] données chargées depuis MongoDB      (ou Postgres / Upstash Redis / Supabase)
+   [store] données chargées depuis Upstash Redis      (ou Postgres / MongoDB / Supabase)
    AINAI prêt sur http://localhost:10000
    ```
    Si vous voyez une erreur, consultez la section Dépannage en bas de ce guide.
@@ -211,7 +215,8 @@ Pour que l'assistante réponde à **tout le monde** :
 | Logs : `MongoServerSelectionError` / timeout | Atlas → **Network Access** : `0.0.0.0/0` doit être **Active**. |
 | Logs : `bad auth` / `Authentication failed` | Mot de passe erroné dans `DATABASE_URL`, ou `<db_password>` non remplacé. Régénérez un mot de passe sans caractères spéciaux. |
 | Logs : `DATABASE_URL doit commencer par…` | L'adresse doit commencer par `mongodb+srv://`, `mongodb://`, `postgresql://` ou `postgres://`. |
-| Logs : `Upstash 401` | URL ou jeton Upstash mal copié : utilisez ceux de la section **REST API**. |
+| Logs : `Upstash 401` | URL ou jeton Upstash mal copié : utilisez ceux de la section **REST API**, pas le jeton « Read-Only ». |
+| Logs : `Upstash 400` / `max request size` | Base trop grosse (rare) : videz le Journal ou contactez-moi. |
 | « Configurer automatiquement » : erreur HTTPS | `PUBLIC_URL` est vide ou incorrect (étape 3.8). |
 | Facebook : « L'URL de rappel n'a pas pu être validée » | Le service Render dormait ou redémarrait : patientez 1 minute et réessayez. Vérifiez que le jeton est identique. |
 | Le bot ne répond pas | 1) La page est-elle **● Active** ? 2) Journal : « Toutes les IA ont échoué » signifie une clé IA invalide, à retester dans 🧠 Moteurs IA. 3) Mode développement : l'auteur du message a-t-il un rôle sur l'app ? 4) Le client est-il en pause « prise en main humaine » (onglet 💬 Conversations) ? |

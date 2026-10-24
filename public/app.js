@@ -154,7 +154,7 @@ async function home() {
   main.append(h(`
     <h1>Bonjour 👋</h1>
     <p class="subtitle">Votre assistante répond à vos commentaires et messages Facebook, 24 h/24.</p>
-    ${state.ephemeralStorage ? '<div class="card"><span class="pill danger">Attention</span> Cet hébergement n’a pas de disque permanent : vos réglages seront effacés au prochain redémarrage. Reliez une base de données gratuite (<code>DATABASE_URL</code> MongoDB Atlas / Neon, ou Upstash Redis) : voir le README.</div>' : ''}
+    ${state.ephemeralStorage ? '<div class="card"><span class="pill danger">Attention</span> Cet hébergement n’a pas de disque permanent : vos réglages seront effacés au prochain redémarrage. Reliez une base de données gratuite (Upstash Redis conseillé, ou <code>DATABASE_URL</code> Neon / MongoDB Atlas) : voir GUIDE.md.</div>' : ''}
     ${done < checklist.length ? `<div class="card"><h2>🚀 Démarrage rapide (${done}/${checklist.length})</h2><ol class="steps">${checklist.map(([ok, label, tab]) => `<li class="${ok ? 'done' : ''}"><a href="#${tab}">${label}</a></li>`).join('')}</ol></div>` : ''}
     <div class="stats">
       <div class="stat"><div class="v">${sum('comments_out', [today])}</div><div class="l">Commentaires répondus aujourd’hui</div></div>

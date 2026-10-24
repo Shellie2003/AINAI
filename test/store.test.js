@@ -82,8 +82,13 @@ test('Upstash : SET / GET via l’API REST', async (t) => {
   });
   const r = upstashRemote('https://x.upstash.io', 'tok');
   assert.equal(await r.load(), null);
-  await r.save({ leads: [1] });
-  assert.deepEqual(await r.load(), { leads: [1] });
+  const big = { leads: [1], logs: Array.from({ length: 500 }, (_, i) => ({ message: `Réponse envoyée à Rakoto ${i}` })) };
+  await r.save(big);
+  assert.match(stored, /^gz:/);
+  assert.ok(stored.length < JSON.stringify(big).length / 4, 'données compressées');
+  assert.deepEqual(await r.load(), big);
+  stored = JSON.stringify({ ancien: true }); // ancien format non compressé toujours lisible
+  assert.deepEqual(await r.load(), { ancien: true });
 });
 
 test('« - » compte comme une variable vide', async () => {

@@ -64,7 +64,7 @@ function merge(base, extra) {
   return out;
 }
 
-const MAX_CONVERSATIONS = 2000;
+const MAX_CONVERSATIONS = 1000;
 
 class Store {
   /**
@@ -111,8 +111,8 @@ class Store {
     if (this.remote && !this.ready) return;
     this.dirty = true;
     if (this.timer) return;
-    // Écritures distantes regroupées pour rester dans les quotas gratuits
-    this.timer = setTimeout(() => this.flush(), this.remote ? 5000 : 300);
+    // Écritures distantes regroupées (au plus une toutes les 10 s) pour rester dans les quotas gratuits
+    this.timer = setTimeout(() => this.flush(), this.remote ? 10_000 : 300);
   }
 
   compact() {

@@ -26,7 +26,7 @@ Un **mini-site** (tableau de bord) permet de tout relier sans écrire de code : 
 
 ## 🚀 Installation
 
-> 📘 **Guide complet pas à pas (Gemini, MongoDB Atlas / Neon / Upstash, Render, Facebook, dépannage) : [GUIDE.md](GUIDE.md)**
+> 📘 **Guide complet pas à pas (Gemini, Upstash / Neon / MongoDB Atlas, Render, Facebook, dépannage) : [GUIDE.md](GUIDE.md)**
 
 ### 1. Lancer le serveur
 
@@ -52,16 +52,16 @@ Le plan gratuit de Render efface son disque à chaque redémarrage : vos réglag
 
 | Service | Gratuit | Ce qu'il faut donner à AINAI |
 |---|---|---|
-| **MongoDB Atlas** ⭐ conseillé | cluster M0, 512 Mo | `DATABASE_URL=mongodb+srv://…` |
-| **Neon** (Postgres) | 0,5 Go | `DATABASE_URL=postgresql://…` |
-| **Upstash** (Redis) | 256 Mo | `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` |
+| **Upstash** (Redis) ⭐ conseillé | 256 Mo, 500 000 commandes par mois | `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` |
+| **Neon** (Postgres) | 0,5 à 1 Go, environ 100 h de calcul par mois | `DATABASE_URL=postgresql://…` |
+| **MongoDB Atlas** | cluster Free (un par projet) | `DATABASE_URL=mongodb+srv://…` |
 | **Supabase** | 500 Mo | `SUPABASE_URL` et `SUPABASE_SECRET_KEY`, après avoir exécuté [`supabase.sql`](supabase.sql) |
 
-Avec MongoDB, Neon ou Upstash, **rien d'autre à faire** : AINAI crée lui-même ce dont il a besoin. Toute la base AINAI tient dans un seul enregistrement, de quelques centaines de Ko.
+Avec Upstash, Neon ou MongoDB, **rien d'autre à faire** : AINAI crée lui-même ce dont il a besoin. Toute la base AINAI tient dans un seul enregistrement, de quelques centaines de Ko.
 
 > 💡 **Vous avez déjà atteint la limite de projets Supabase ?** La limite porte sur le nombre de *projets*, pas de tables. Vous pouvez exécuter `supabase.sql` dans un projet existant : AINAI n'y ajoute qu'une table, `ainai_store`.
 
-<details><summary><b>MongoDB Atlas, pas à pas</b></summary>
+<details><summary><b>MongoDB Atlas, pas à pas</b> (cluster gratuit parfois introuvable : voir GUIDE.md)</summary>
 
 1. Créez un compte sur <https://www.mongodb.com/cloud/atlas/register>, puis un cluster **M0 (Free)**.
 2. **Database Access** : créez un utilisateur et un mot de passe. Évitez les caractères spéciaux comme `@`, `:` ou `/` dans le mot de passe.
@@ -98,7 +98,7 @@ Mettez ce projet dans votre dépôt GitHub. C'est déjà le cas si vous lisez ce
 **Pourquoi ça tient sur le gratuit :**
 - Render endort un service gratuit après 15 minutes sans visite. AINAI se rend visite toutes les 10 minutes pour rester éveillé et ne pas rater de messages. Par sécurité, vous pouvez aussi créer une tâche gratuite sur <https://cron-job.org> qui appelle `https://VOTRE-ADRESSE/healthz` toutes les 10 minutes.
 - Le plan gratuit de Render inclut 750 heures par mois, ce qui suffit pour un service allumé en permanence.
-- Les bases gratuites mettent en veille les projets inactifs. AINAI consulte la sienne une fois par jour pour l'éviter, et regroupe ses écritures (au plus une toutes les 5 secondes) pour rester dans les quotas.
+- Les bases gratuites mettent en veille les projets inactifs. AINAI consulte la sienne une fois par jour pour l'éviter, et regroupe ses écritures (au plus une toutes les 10 secondes, compressées pour Upstash) pour rester dans les quotas.
 - Les clés API sont chiffrées avant d'être enregistrées : même la base de données ne les voit pas en clair.
 - Pour l'IA, Gemini est gratuit. Ajoutez Groq ou OpenRouter, gratuits aussi, comme relais en cas de quota atteint.
 

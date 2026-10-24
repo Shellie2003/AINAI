@@ -1,4 +1,5 @@
 // Bases de données distantes gratuites. Chacune garde toute la base AINAI dans un seul enregistrement.
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { supabaseRemote } from './supabase.js';
 
 const KEY = 'main';
@@ -13,8 +14,12 @@ export function postgresRemote(url) {
     pool = new pg.Pool({
       connectionString: url,
       max: 2,
+      // Connexions fermées vite : Neon gratuit peut alors s'endormir et ne pas épuiser ses heures de calcul
+      idleTimeoutMillis: 10_000,
       ...(local || /sslmode=/.test(url) ? {} : { ssl: { rejectUnauthorized: false } }),
     });
+    // Neon coupe les connexions quand il s'endort : ce n'est pas une panne, le pool se reconnecte au besoin
+    pool.on('error', (err) => console.error(`[store] connexion Postgres fermée : ${err.message}`));
     await pool.query(`create table if not exists ainai_store (
       id text primary key,
       data jsonb not null,
@@ -61,7 +66,7 @@ export function mongoRemote(url) {
   };
 }
 
-/** Upstash Redis via son API REST (aucune dépendance). */
+/** Upstash Redis via son API REST (aucune dépendance). Données compressées : la bande passante gratuite est limitée. */
 export function upstashRemote(url, token) {
   async function command(args) {
     const res = await fetch(url.replace(/\/+$/, ''), {
@@ -78,10 +83,11 @@ export function upstashRemote(url, token) {
     name: 'Upstash Redis',
     async load() {
       const raw = await command(['GET', `ainai:${KEY}`]);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      return JSON.parse(raw.startsWith('gz:') ? gunzipSync(Buffer.from(raw.slice(3), 'base64')).toString('utf8') : raw);
     },
     async save(data) {
-      await command(['SET', `ainai:${KEY}`, JSON.stringify(data)]);
+      await command(['SET', `ainai:${KEY}`, `gz:${gzipSync(JSON.stringify(data)).toString('base64')}`]);
     },
   };
 }
