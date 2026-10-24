@@ -76,7 +76,13 @@ export function upstashRemote(url, token) {
       signal: AbortSignal.timeout(20000),
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok || body.error) throw new Error(`Upstash ${res.status}: ${body.error || 'erreur'}`);
+    if (!res.ok || body.error) {
+      const hint =
+        res.status === 401
+          ? ' → Jeton refusé : recopiez UPSTASH_REDIS_REST_TOKEN depuis la section « REST API » de VOTRE base (pas le jeton « Read-Only », ni le mot de passe redis://).'
+          : '';
+      throw new Error(`Upstash ${res.status}: ${body.error || 'erreur'}${hint}`);
+    }
     return body.result;
   }
   return {
@@ -97,7 +103,8 @@ const PLACEHOLDERS = new Set(['', '-', 'aucun', 'none', 'vide']);
 export const cleanEnv = (env) =>
   Object.fromEntries(
     Object.entries(env)
-      .map(([k, v]) => [k, String(v ?? '').trim()]) // espaces copiés-collés par erreur
+      // Erreurs de copier-coller courantes : espaces, guillemets, ou ligne « NOM=valeur » copiée en entier
+      .map(([k, v]) => [k, String(v ?? '').trim().replace(new RegExp(`^${k}\\s*=\\s*`), '').replace(/^(["'])(.*)\1$/, '$2').trim()])
       .filter(([, v]) => !PLACEHOLDERS.has(v.toLowerCase())),
   );
 

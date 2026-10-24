@@ -96,3 +96,10 @@ test('« - » compte comme une variable vide', async () => {
   assert.equal(createRemote({ DATABASE_URL: '-', UPSTASH_REDIS_REST_URL: '-', SUPABASE_URL: ' - ' }), null);
   assert.equal(createRemote({ DATABASE_URL: 'mongodb+srv://a', SUPABASE_URL: '-' }).name, 'MongoDB');
 });
+
+test('variables copiées avec guillemets ou « NOM=valeur » nettoyées', async () => {
+  const { cleanEnv } = await import('../src/remotes.js');
+  const env = cleanEnv({ UPSTASH_REDIS_REST_TOKEN: ' UPSTASH_REDIS_REST_TOKEN="AXyz=="  ', UPSTASH_REDIS_REST_URL: "'https://a.upstash.io'" });
+  assert.equal(env.UPSTASH_REDIS_REST_TOKEN, 'AXyz==');
+  assert.equal(env.UPSTASH_REDIS_REST_URL, 'https://a.upstash.io');
+});
