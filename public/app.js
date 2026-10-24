@@ -27,10 +27,12 @@ function toast(msg, error = false) {
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmtDate = (ts) => (ts ? new Date(ts).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+// Un seul élément racine → on renvoie l'élément lui-même (il reste utilisable après insertion dans la page,
+// contrairement à un DocumentFragment qui se vide) ; plusieurs racines → fragment.
 const h = (html) => {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
-  return t.content;
+  return t.content.children.length === 1 && t.content.childNodes.length === 1 ? t.content.firstElementChild : t.content;
 };
 
 // Exécute une action de bouton avec état « chargement » et message d'erreur.
@@ -302,7 +304,10 @@ async function ai() {
     q('[data-save]').onclick = (e) => act(e.target, async () => { await api(`/api/providers/${p.id}`, { method: 'PUT', body: { model: q('[data-model]').value, apiKey: q('[data-key]').value } }); route(); }, 'Enregistré ✔');
     q('[data-toggle]').onclick = (e) => act(e.target, async () => { await api(`/api/providers/${p.id}`, { method: 'PUT', body: { enabled: !p.enabled } }); route(); });
     q('[data-del]').onclick = (e) => confirm('Supprimer cette IA ?') && act(e.target, async () => { await api(`/api/providers/${p.id}`, { method: 'DELETE' }); route(); });
-    q('[data-test]').onclick = (e) => act(e.target, async () => { const r = await api(`/api/providers/${p.id}/test`, { method: 'POST' }); q('[data-out]').textContent = `✅ ${r.ms} ms – « ${r.text} »`;
+    q('[data-test]').onclick = (e) => act(e.target, async () => {
+      q('[data-out]').textContent = '⏳ Test en cours…';
+      const r = await api(`/api/providers/${p.id}/test`, { method: 'POST' }).catch((err) => { q('[data-out]').textContent = `❌ ${err.message}`; throw err; });
+      q('[data-out]').textContent = `✅ ${r.ms} ms – « ${r.text} »`;
       if (r.modelChanged) { toast(`Modèle ${r.modelChanged.from} retiré : remplacé par ${r.modelChanged.to}`); q('[data-model]').value = r.model; }
     });
     q('[data-models]').onclick = (e) => act(e.target, async () => {
@@ -531,7 +536,7 @@ async function conversations(params) {
     const el = h(`<div class="list-item" data-key="${esc(c.key)}"><div class="spread"><b>${esc(c.name || c.userId)}</b><span class="small muted">${fmtDate(c.updatedAt)}</span></div>
       <div class="small muted">${esc((c.last?.text || '').slice(0, 80))}</div>
       <div class="row small">${paused ? '<span class="pill warn">⏸ pause</span>' : ''}${c.needsHuman ? '<span class="pill danger">humain requis</span>' : ''}</div></div>`);
-    el.firstElementChild.onclick = () => openConversation(c.key);
+    el.onclick = () => openConversation(c.key);
     box.append(el);
   }
   const key = params.get('key') || list[0]?.key;
