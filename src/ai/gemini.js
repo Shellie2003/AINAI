@@ -12,30 +12,9 @@ export const geminiProvider = {
 
   async generate({ apiKey, model, system, messages, json, maxTokens = 1024, signal }) {
     const request = { apiKey, system, messages, json, maxTokens, signal };
-    try {
-      return { ...(await generateWithRetry({ ...request, model })), model };
-    } catch (err) {
-      // Google retire régulièrement des modèles (404) : on bascule tout seul sur le remplaçant et on le retient.
-      if (err.status === 404) {
-        const replacement = suggestedModel(err.message, model) || pickBestModel(await this.listModels({ apiKey }).catch(() => []), model);
-        if (!replacement) throw err;
-        const out = await generateWithRetry({ ...request, model: replacement });
-        return { ...out, model: replacement, modelChanged: { from: model, to: replacement } };
-      }
-      // Surcharge (503) ou quota du modèle épuisé (429) : chaque modèle gratuit a ses propres limites,
-      // on dépanne avec un autre modèle Gemini avant de passer à une autre IA.
-      if (!err.retryable) throw err;
-      // Après un délai dépassé, moins de modèles de secours : on ne fait pas attendre le client plus longtemps
-      const backups = pickBackupModels(await this.listModels({ apiKey }).catch(() => []), model, err.status === 504 ? 2 : 3);
-      for (const backup of backups) {
-        try {
-          return { ...(await generateOnce({ ...request, model: backup })), model: backup, temporaryModel: true };
-        } catch (e) {
-          if (!e.retryable) break;
-        }
-      }
-      throw err;
-    }
+    // Liste des modèles de secours préparée tout de suite (en cache 1 h) pour ne pas perdre de temps ensuite
+    const backups = this.listModels({ apiKey }).catch(() => []);
+    return race(request, model, backups);
   },
 
   async listModels({ apiKey }) {
@@ -48,7 +27,7 @@ export const geminiProvider = {
     const list = (data.models || [])
       .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
       .map((m) => m.name.replace(/^models\//, ''));
-    modelCache.set(apiKey, { at: Date.now(), list });
+    if (list.length) modelCache.set(apiKey, { at: Date.now(), list }); // une liste vide n'est pas gardée
     return list;
   },
 
@@ -154,7 +133,8 @@ export function pickBestModel(models, current) {
 }
 
 // Délais entre deux essais quand Google est surchargé (modifiables dans les tests).
-export const geminiRetry = { delays: [1000], attemptMs: 20_000 };
+// hedgeMs : au-delà, on lance un modèle de secours en parallèle ; attemptMs : délai maximal d'un essai
+export const geminiRetry = { delays: [1000], attemptMs: 30_000, hedgeMs: 8_000 };
 
 async function generateWithRetry(request) {
   for (let attempt = 0; ; attempt++) {
@@ -184,4 +164,79 @@ export function pickBackupModels(models, current, max = 3) {
   // Gemma : la version la plus récente et le plus gros modèle (meilleur en malgache)
   const gemma = models.filter((m) => /^gemma-/.test(m) && usable(m)).sort((a, b) => version(b) - version(a) || size(b) - size(a));
   return [...flash.slice(0, max - (gemma.length ? 1 : 0)), ...gemma.slice(0, 1)].slice(0, max);
+}
+
+/**
+ * Course entre modèles : on lance le modèle choisi ; s'il n'a pas répondu au bout de `hedgeMs`
+ * (ou s'il échoue : surcharge, quota, délai), on lance un modèle de secours EN PARALLÈLE
+ * et on garde la première bonne réponse. Les requêtes perdantes sont annulées.
+ */
+function race(request, model, backupsPromise) {
+  return new Promise((resolve, reject) => {
+    const controllers = [];
+    const errors = [];
+    let queue = null; // modèles de secours restants
+    let running = 0;
+    let done = false;
+    let hedgeTimer = null;
+
+    const finish = (fn, value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(hedgeTimer);
+      controllers.forEach((c) => c.abort());
+      fn(value);
+    };
+
+    const fail = () => {
+      const first = errors[0];
+      const err = new Error(errors.map((e) => e.message).join(' | '));
+      Object.assign(err, { status: first?.status, retryable: errors.some((e) => e.retryable) });
+      finish(reject, err);
+    };
+
+    const launch = (m, extra = {}) => {
+      const ctrl = new AbortController();
+      controllers.push(ctrl);
+      running++;
+      const signal = AbortSignal.any([request.signal, ctrl.signal].filter(Boolean));
+      const call = m === model ? generateWithRetry({ ...request, model: m, signal }) : generateOnce({ ...request, model: m, signal });
+      call.then(
+        (out) => finish(resolve, { ...out, model: m, ...extra }),
+        (err) => {
+          running--;
+          if (done) return;
+          errors.push(err);
+          // Modèle retiré (404) : on bascule sur son remplaçant et on le retient
+          if (err.status === 404 && m === model) {
+            backupsPromise.then((list) => {
+              const replacement = suggestedModel(err.message, model) || pickBestModel(list, model);
+              if (replacement && !done) return launch(replacement, { modelChanged: { from: model, to: replacement } });
+              if (!running) fail();
+            });
+            return;
+          }
+          // Clé invalide, requête refusée… : inutile d'essayer d'autres modèles
+          if (!err.retryable && err.status !== 504) {
+            if (!running) fail();
+            return;
+          }
+          next().then((started) => !started && !running && fail());
+        },
+      );
+    };
+
+    // Lance le prochain modèle de secours ; renvoie false s'il n'y en a plus
+    const next = async () => {
+      queue ??= pickBackupModels(await backupsPromise, model);
+      if (done) return true;
+      const m = queue.shift();
+      if (!m) return false;
+      launch(m, { temporaryModel: true });
+      return true;
+    };
+
+    launch(model);
+    hedgeTimer = setTimeout(() => !done && next(), geminiRetry.hedgeMs);
+  });
 }

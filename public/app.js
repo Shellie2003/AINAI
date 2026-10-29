@@ -311,7 +311,7 @@ async function ai() {
     q('[data-test]').onclick = (e) => act(e.target, async () => {
       q('[data-out]').textContent = '⏳ Test en cours…';
       const r = await api(`/api/providers/${p.id}/test`, { method: 'POST' }).catch((err) => { q('[data-out]').textContent = `❌ ${err.message}`; throw err; });
-      q('[data-out]').textContent = `✅ ${r.ms} ms – « ${r.text} »`;
+      q('[data-out]').textContent = `✅ ${(r.ms / 1000).toFixed(1)} s – modèle ${r.model} – « ${r.text} »`;
       if (r.modelChanged) { toast(`Modèle ${r.modelChanged.from} retiré : remplacé par ${r.modelChanged.to}`); q('[data-model]').value = r.model; }
     });
     q('[data-models]').onclick = (e) => act(e.target, async () => {

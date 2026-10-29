@@ -25,7 +25,7 @@ test('bascule automatiquement sur l’IA suivante quand Gemini dépasse son quot
   assert.equal(out.provider, 'Groq');
   assert.equal(out.text, '{"reply":"Bonjour"}');
   assert.equal(out.errors.length, 1);
-  assert.match(calls[0], /gemini-2\.5-flash:generateContent/);
+  assert.match(calls.find((u) => u.includes(':generateContent')), /gemini-2\.5-flash:generateContent/);
 
   // Gemini est en pause (quota) : on ne le rappelle pas tout de suite
   calls.length = 0;
@@ -71,7 +71,7 @@ test('modèle Gemini retiré (404) : bascule sur le modèle conseillé par Googl
   assert.equal(out.text, 'Salut');
   assert.equal(out.model, 'gemini-3.8-flash');
   assert.equal(provider.model, 'gemini-3.8-flash'); // mémorisé
-  assert.match(urls[1], /gemini-3\.8-flash:generateContent/);
+  assert.match(urls.filter((u) => u.includes(':generateContent'))[1], /gemini-3\.8-flash:generateContent/);
 });
 
 test('modèle retiré sans suggestion : choix du meilleur « flash » disponible', async (t) => {
@@ -207,4 +207,29 @@ test('crédit épuisé (402) : message clair et IA mise de côté pour ne pas ra
   resetCooldown('ds');
   await generateWithFallback(providers, { system: 's', messages: [{ role: 'user', text: 'c' }] });
   assert.equal(deepseekCalls, 2);
+});
+
+test('Gemini lent : un modèle de secours est lancé en parallèle et la réponse la plus rapide gagne', async (t) => {
+  const { geminiRetry } = await import('../src/ai/gemini.js');
+  geminiRetry.hedgeMs = 30;
+  const aborted = [];
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const u = String(url);
+    if (u.includes('/models?')) return Response.json({ models: [{ name: 'models/gemini-3.8-flash-lite', supportedGenerationMethods: ['generateContent'] }] });
+    if (u.includes('gemini-3.8-flash:')) {
+      // modèle principal très lent : répond au bout de 2 s (sauf s'il est annulé)
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => resolve(Response.json({ candidates: [{ content: { parts: [{ text: 'lent' }] } }] })), 2000);
+        init.signal.addEventListener('abort', () => { clearTimeout(timer); aborted.push('principal'); reject(new DOMException('aborted', 'AbortError')); });
+      });
+    }
+    return Response.json({ candidates: [{ content: { parts: [{ text: 'rapide' }] } }] });
+  });
+  const started = Date.now();
+  const out = await generateWithFallback([{ id: 'hedge', type: 'gemini', apiKey: encrypt('k-hedge'), model: 'gemini-3.8-flash' }], { system: 's', messages: [{ role: 'user', text: 'a' }] });
+  assert.equal(out.text, 'rapide');
+  assert.equal(out.model, 'gemini-3.8-flash-lite');
+  assert.ok(Date.now() - started < 1000);
+  assert.deepEqual(aborted, ['principal']); // la requête lente est annulée
+  geminiRetry.hedgeMs = 8000;
 });
