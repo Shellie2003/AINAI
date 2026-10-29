@@ -8,6 +8,7 @@ const SERVER_FALLBACK_MODELS = new Set(['claude-fable-5-1', 'claude-opus-5-5', '
 export const anthropicProvider = {
   type: 'anthropic',
   label: 'Anthropic Claude',
+  malagasy: true,
   defaultModel: 'claude-opus-5-5',
   keyUrl: 'https://console.anthropic.com/settings/keys',
   media: ['image/', 'application/pdf'],

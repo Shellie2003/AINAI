@@ -37,6 +37,8 @@ Ajoutez-les dans l'onglet **🧠 Moteurs IA** : **Fournisseur** → collez la cl
 | **DeepSeek** (payant) | <https://platform.deepseek.com> | `deepseek-chat` | Pas d'offre gratuite : il faut recharger le compte, sinon erreur 402. |
 | **Claude** (payant) | <https://console.anthropic.com/settings/keys> | `claude-opus-5-5` | Excellente rédaction. `claude-haiku-5-5` est bien moins cher. |
 
+**🇲🇬 Et le malgache ?** Seuls **Gemini** (gratuit) et **Claude** (payant, mais `claude-haiku-5-5` coûte très peu) parlent bien malgache. Groq, Cerebras, OpenRouter et Mistral sont marqués **« français seulement »** : ils ne répondent jamais à un message en malgache. Avec la seule clé Gemini, l'assistante utilise en secours **Gemini Flash Lite**, puis **Gemma** : ce sont d'autres modèles gratuits de Google, avec leurs propres quotas. Si tous sont indisponibles, le client reçoit un **message d'attente en malgache** (réglable dans ⚙️ Automatisation) et la conversation est marquée « humain requis ».
+
 **Comment ça marche :**
 - Si une IA échoue (saturée, quota du jour atteint, panne), la suivante répond automatiquement. Le client ne voit rien.
 - Une IA qui renvoie « quota dépassé » est mise de côté pendant 1 minute.

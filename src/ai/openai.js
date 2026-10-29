@@ -78,6 +78,7 @@ export function openaiProvider(preset) {
     defaultModel: p.defaultModel,
     defaultBaseUrl: p.baseUrl,
     keyUrl: p.keyUrl,
+    malagasy: preset === 'openai', // les modèles gratuits (Llama, gpt-oss, Qwen…) sont faibles en malgache
     media: ['image/'],
 
     async generate(request) {

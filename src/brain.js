@@ -1,4 +1,4 @@
-import { generateWithFallback } from './ai/index.js';
+import { generateWithFallback, speaksMalagasy } from './ai/index.js';
 
 const KNOWLEDGE_BUDGET = 12000; // caractères de base de connaissances injectés au maximum (prompt court = réponse rapide)
 
@@ -48,6 +48,20 @@ export function matchRule(rules, text, channel) {
       (r.channel === 'all' || r.channel === channel) &&
       (r.keywords || []).some((kw) => kw.trim() && n.includes(` ${normalize(kw).trim()} `)),
   );
+}
+
+// Mots malgaches très courants (sans accents) : suffisent à reconnaître un message en malgache.
+const MG_WORDS = new Set(
+  'ny ary aho izaho ianao anao izy isika izahay misaotra salama azafady ohatrinona manao ahoana tsara vidiny mba ve iza aiza rahoviana firy tiako mila mividy afaka misy tsy eto any ho amin amin\'ny tamin noho fa raha dia koa ihany ve inona nahoana mandefa alefa entana vola ariary vita hoe angamba mahafinaritra veloma tompoko ry lafo mora maika'
+    .split(' '),
+);
+
+/** Le texte est-il (surtout) en malgache ? */
+export function isMalagasy(text) {
+  const words = normalize(text).split(/\s+/).filter(Boolean);
+  if (!words.length) return false;
+  const hits = words.filter((w) => MG_WORDS.has(w)).length;
+  return hits >= 2 || (words.length <= 3 && hits >= 1);
 }
 
 export function isWithinBusinessHours(bh, now = new Date()) {
@@ -173,7 +187,30 @@ export async function think(settings, { channel, history, userName, postContext,
   let system = buildSystemPrompt(settings, { channel, knowledge, offHours, userName, postContext });
   if (rule?.useAi) system += `\n\nConsigne pour ce message (règle « ${rule.name || rule.keywords.join(', ')} ») : ${rule.response}`;
 
-  const out = await generateWithFallback(settings.providers, { system, messages: history, json: true, maxTokens: 2048 });
+  // Message en malgache : seules les IA qui parlent bien malgache répondent (les autres feraient des erreurs gênantes).
+  const malagasy = isMalagasy(history.filter((m) => m.role === 'user').slice(-2).map((m) => m.text).join(' '));
+  const strong = settings.providers.filter((p) => p.enabled !== false && speaksMalagasy(p));
+  const strict = malagasy && settings.automation.malagasyStrict !== false && strong.length > 0;
+  let out;
+  try {
+    out = await generateWithFallback(strict ? strong : settings.providers, { system, messages: history, json: true, maxTokens: 2048 });
+  } catch (err) {
+    if (!strict) throw err;
+    // Toutes les IA « malgache » sont indisponibles : message d'attente poli, et un humain prend le relais
+    return {
+      reply: settings.automation.malagasyHoldingMessage || "Misaotra tamin'ny hafatrao! Hamaly anao tsy ho ela izahay 🙏",
+      privateMessage: '',
+      intent: 'autre',
+      sentiment: 'neutre',
+      language: 'mg',
+      needsHuman: true,
+      hide: false,
+      lead: { name: '', phone: '', email: '', interest: '' },
+      provider: "Message d'attente (malgache)",
+      ms: 0,
+      fallbackErrors: err.errors || [err.message],
+    };
+  }
   const result = parseAiJson(out.text);
   const contacts = extractContacts(history.filter((m) => m.role === 'user').map((m) => m.text).join(' '));
   result.lead.phone ||= contacts.phone;

@@ -297,7 +297,7 @@ async function ai() {
   if (!state.settings.providers.length) list.append(h('<div class="card muted">Aucune IA. Commencez par Gemini (gratuit) 👇</div>'));
   state.settings.providers.forEach((p, i) => {
     const el = h(`<div class="list-item" draggable="true" data-id="${p.id}">
-      <div class="spread"><div class="row"><span class="handle">☰</span><b>${i + 1}. ${esc(p.name)}</b><span class="pill">${esc(cat[p.type]?.label || p.type)}</span>${p.enabled ? '<span class="pill ok">activée</span>' : '<span class="pill">désactivée</span>'}</div>
+      <div class="spread"><div class="row"><span class="handle">☰</span><b>${i + 1}. ${esc(p.name)}</b><span class="pill">${esc(cat[p.type]?.label || p.type)}</span>${cat[p.type]?.malagasy ? '<span class="pill ok" title="Bon en malgache">🇲🇬 malgache</span>' : '<span class="pill warn" title="Faible en malgache : utilisée seulement pour les messages en français / anglais">français seulement</span>'}${p.enabled ? '<span class="pill ok">activée</span>' : '<span class="pill">désactivée</span>'}</div>
       <div class="row"><button class="btn small" data-test>Tester</button><button class="btn small" data-toggle>${p.enabled ? 'Désactiver' : 'Activer'}</button><button class="btn small danger" data-del>Supprimer</button></div></div>
       <div class="grid two">
         <div><label>Modèle</label><div class="row"><input class="grow" data-model value="${esc(p.model)}" list="models-${p.id}" /><button class="btn small" data-models title="Charger la liste des modèles">↻</button></div><datalist id="models-${p.id}"></datalist></div>
@@ -446,6 +446,8 @@ function automation() {
         <label>Délai aléatoire avant réponse (secondes)</label>
         <div class="row"><input id="dMin" type="number" min="0" value="${a.replyDelay.min}" /> à <input id="dMax" type="number" min="0" value="${a.replyDelay.max}" /></div>
         <label>Message quand l’IA a besoin d’un humain</label><textarea id="escal">${esc(a.escalationMessage)}</textarea>
+        <label class="check"><input type="checkbox" id="mgStrict" ${a.malagasyStrict !== false ? 'checked' : ''}/> 🇲🇬 Messages en malgache : ne répondre qu’avec les IA qui parlent bien malgache (Gemini, Claude…)</label>
+        <label>Message d’attente en malgache si ces IA sont indisponibles</label><input id="mgHold" value="${esc(a.malagasyHoldingMessage || '')}" />
       </div>
       <div class="card"><h2>🕘 Heures d’ouverture</h2>
         <label class="check"><input type="checkbox" id="bhOn" ${a.businessHours.enabled ? 'checked' : ''}/> Tenir compte des heures d’ouverture</label>
@@ -492,6 +494,8 @@ function automation() {
       humanTakeoverHours: Number($('#takeover').value),
       replyDelay: { min: Number($('#dMin').value), max: Number($('#dMax').value) },
       escalationMessage: $('#escal').value,
+      malagasyStrict: $('#mgStrict').checked,
+      malagasyHoldingMessage: $('#mgHold').value,
       businessHours: { enabled: $('#bhOn').checked, start: $('#bhStart').value, end: $('#bhEnd').value, timezone: $('#bhTz').value, offHoursNote: $('#bhNote').value },
     }, e.target);
   };

@@ -55,3 +55,64 @@ test('le prompt inclut connaissances, exemples et consigne de langue', () => {
   assert.match(p, /malgache/);
   assert.match(p, /COMMENTAIRE PUBLIC/);
 });
+
+test('message en malgache : seules les IA qui parlent malgache répondent, sinon message d’attente', async (t) => {
+  const { think, isMalagasy } = await import('../src/brain.js');
+  const { encrypt } = await import('../src/crypto.js');
+  assert.equal(isMalagasy('Salama, ohatrinona ity akanjo ity?'), true);
+  assert.equal(isMalagasy('Bonjour, combien pour la livraison ?'), false);
+  const calls = [];
+  let geminiDown = false;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const u = String(url);
+    calls.push(u.includes('generativelanguage') ? 'gemini' : 'groq');
+    if (u.includes('generativelanguage')) {
+      if (geminiDown) return Response.json({ error: { message: 'bad key' } }, { status: 400 });
+      return Response.json({ candidates: [{ content: { parts: [{ text: '{"reply":"Salama! 45 000 Ar ny vidiny."}' }] } }] });
+    }
+    return Response.json({ choices: [{ message: { content: '{"reply":"réponse groq"}' } }] });
+  });
+  const s = defaultData().settings;
+  s.providers = [
+    { id: 'g', type: 'gemini', apiKey: encrypt('k-mg'), model: 'gemini-3.8-flash' },
+    { id: 'q', type: 'groq', apiKey: encrypt('gsk') },
+  ];
+  const mg = [{ role: 'user', text: 'Salama, ohatrinona ity akanjo ity?' }];
+  assert.match((await think(s, { channel: 'message', history: mg })).reply, /vidiny/);
+
+  geminiDown = true;
+  calls.length = 0;
+  const r = await think(s, { channel: 'message', history: mg });
+  assert.equal(r.needsHuman, true);
+  assert.match(r.reply, /Misaotra/);
+  assert.ok(!calls.includes('groq'), 'Groq ne doit pas répondre en malgache');
+
+  // En français, Groq peut servir de secours
+  const fr = await think(s, { channel: 'message', history: [{ role: 'user', text: 'Bonjour, quel est le prix ?' }] });
+  assert.equal(fr.reply, 'réponse groq');
+});
+
+test('Gemma en secours : consignes dans la conversation, sans mode JSON', async (t) => {
+  const { pickBackupModels } = await import('../src/ai/gemini.js');
+  assert.deepEqual(
+    pickBackupModels(['gemini-3.8-flash', 'gemini-3.8-flash-lite', 'gemma-3-27b-it', 'gemma-4-31b-it', 'gemma-4-e4b-it'], 'gemini-3.8-flash'),
+    ['gemini-3.8-flash-lite', 'gemma-4-31b-it'],
+  );
+  const { generateWithFallback } = await import('../src/ai/index.js');
+  const { encrypt } = await import('../src/crypto.js');
+  let gemmaBody;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const u = String(url);
+    if (u.includes('/models?')) return Response.json({ models: [{ name: 'models/gemma-4-31b-it', supportedGenerationMethods: ['generateContent'] }] });
+    if (u.includes('gemma-4-31b-it:')) {
+      gemmaBody = JSON.parse(init.body);
+      return Response.json({ candidates: [{ content: { parts: [{ text: '{"reply":"Salama"}' }] } }] });
+    }
+    return Response.json({ error: { message: 'quota' } }, { status: 429 });
+  });
+  const out = await generateWithFallback([{ id: 'gm', type: 'gemini', apiKey: encrypt('k-gemma'), model: 'gemini-3.8-flash' }], { system: 'SYS', messages: [{ role: 'user', text: 'a' }], json: true });
+  assert.equal(out.model, 'gemma-4-31b-it');
+  assert.equal(gemmaBody.systemInstruction, undefined);
+  assert.equal(gemmaBody.generationConfig.responseMimeType, undefined);
+  assert.match(gemmaBody.contents[0].parts[0].text, /SYS/);
+});

@@ -41,6 +41,9 @@ export function defaultData() {
         replyDelay: { min: 0, max: 2 },
         businessHours: { enabled: false, start: '08:00', end: '18:00', timezone: 'Indian/Antananarivo', offHoursNote: '' },
         escalationMessage: 'Merci pour votre message ! Un membre de notre équipe vous répond très vite 🙏',
+        // En malgache, seules les IA qui le parlent bien répondent ; sinon ce message d'attente
+        malagasyStrict: true,
+        malagasyHoldingMessage: "Misaotra tamin'ny hafatrao! Hamaly anao tsy ho ela izahay 🙏",
       },
       rules: [],
     },

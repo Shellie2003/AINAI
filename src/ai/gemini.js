@@ -5,6 +5,7 @@ const modelCache = new Map();
 export const geminiProvider = {
   type: 'gemini',
   label: 'Google Gemini (AI Studio – gratuit)',
+  malagasy: true, // très bon en malgache
   defaultModel: 'gemini-3.8-flash',
   keyUrl: 'https://aistudio.google.com/app/apikey',
   media: ['image/', 'audio/', 'video/', 'application/pdf'],
@@ -24,8 +25,8 @@ export const geminiProvider = {
       // Surcharge (503) ou quota du modèle épuisé (429) : chaque modèle gratuit a ses propres limites,
       // on dépanne avec un autre modèle Gemini avant de passer à une autre IA.
       if (!err.retryable) throw err;
-      // Après un délai dépassé, un seul modèle de secours : on ne fait pas attendre le client plus longtemps
-      const backups = pickBackupModels(await this.listModels({ apiKey }).catch(() => []), model, err.status === 504 ? 1 : 2);
+      // Après un délai dépassé, moins de modèles de secours : on ne fait pas attendre le client plus longtemps
+      const backups = pickBackupModels(await this.listModels({ apiKey }).catch(() => []), model, err.status === 504 ? 2 : 3);
       for (const backup of backups) {
         try {
           return { ...(await generateOnce({ ...request, model: backup })), model: backup, temporaryModel: true };
@@ -90,14 +91,17 @@ async function generateOnce({ apiKey, model, system, messages, json, maxTokens, 
       { text: m.text || ' ' },
     ],
   }));
-  const thinkingConfig = thinkingConfigFor(model);
+  // Gemma (gratuit, même clé) : pas d'instruction système ni de mode JSON → consignes placées en tête de conversation
+  const gemma = /^gemma-/.test(model);
+  if (gemma) contents.unshift({ role: 'user', parts: [{ text: `CONSIGNES (à suivre strictement) :\n${system}` }] }, { role: 'model', parts: [{ text: 'Compris.' }] });
+  const thinkingConfig = gemma ? null : thinkingConfigFor(model);
   const body = {
-    systemInstruction: { parts: [{ text: system }] },
+    ...(gemma ? {} : { systemInstruction: { parts: [{ text: system }] } }),
     contents,
     generationConfig: {
       maxOutputTokens: Math.max(maxTokens, 4096),
       temperature: 0.7,
-      ...(json ? { responseMimeType: 'application/json' } : {}),
+      ...(json && !gemma ? { responseMimeType: 'application/json' } : {}),
       ...(thinkingConfig ? { thinkingConfig } : {}),
     },
   };
@@ -166,12 +170,18 @@ async function generateWithRetry(request) {
   }
 }
 
-/** Modèles de dépannage : autres « flash » (y compris « lite », plus légers et moins demandés). */
-export function pickBackupModels(models, current, max = 2) {
-  const version = (m) => Number(m.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] || 0);
-  return models
-    .filter((m) => /^gemini-/.test(m) && /flash/.test(m) && m !== current)
-    .filter((m) => !/(image|tts|audio|embed|live|vision|exp|robotics|computer)/.test(m))
-    .sort((a, b) => Number(/preview/.test(a)) - Number(/preview/.test(b)) || version(b) - version(a) || a.length - b.length)
-    .slice(0, max);
+/**
+ * Modèles de dépannage, avec la même clé (chaque modèle a son propre quota gratuit) :
+ * d'abord les autres Gemini « flash » (dont « lite », plus légers), puis Gemma (gratuit, multilingue).
+ */
+export function pickBackupModels(models, current, max = 3) {
+  const version = (m) => Number(m.match(/(?:gemini|gemma)-(\d+(?:\.\d+)?)/)?.[1] || 0);
+  const size = (m) => Number(m.match(/-(\d+)b/)?.[1] || 0);
+  const usable = (m) => m !== current && !/(image|tts|audio|embed|live|vision|exp|robotics|computer|nano|-e\d+b|-1b)/.test(m);
+  const flash = models
+    .filter((m) => /^gemini-/.test(m) && /flash/.test(m) && usable(m))
+    .sort((a, b) => Number(/preview/.test(a)) - Number(/preview/.test(b)) || version(b) - version(a) || a.length - b.length);
+  // Gemma : la version la plus récente et le plus gros modèle (meilleur en malgache)
+  const gemma = models.filter((m) => /^gemma-/.test(m) && usable(m)).sort((a, b) => version(b) - version(a) || size(b) - size(a));
+  return [...flash.slice(0, max - (gemma.length ? 1 : 0)), ...gemma.slice(0, 1)].slice(0, max);
 }

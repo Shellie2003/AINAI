@@ -17,8 +17,11 @@ export function providerCatalog() {
     defaultBaseUrl: p.defaultBaseUrl || '',
     keyUrl: p.keyUrl,
     media: p.media,
+    malagasy: Boolean(p.malagasy),
   }));
 }
+
+export const speaksMalagasy = (provider) => Boolean(PROVIDERS[provider.type]?.malagasy);
 
 // Mise en veille temporaire d'une IA qui renvoie « quota dépassé » (429).
 const cooldown = new Map();
