@@ -103,3 +103,16 @@ test('variables copiées avec guillemets ou « NOM=valeur » nettoyées', async 
   assert.equal(env.UPSTASH_REDIS_REST_TOKEN, 'AXyz==');
   assert.equal(env.UPSTASH_REDIS_REST_URL, 'https://a.upstash.io');
 });
+
+test('migration : anciens délais par défaut raccourcis, choix personnalisés conservés', async () => {
+  const { migrate, defaultData } = await import('../src/store.js');
+  const old = defaultData();
+  old.settings.automation.messages.aggregateSeconds = 6;
+  old.settings.automation.replyDelay = { min: 3, max: 12 };
+  const m = migrate(old);
+  assert.equal(m.settings.automation.messages.aggregateSeconds, 3);
+  assert.deepEqual(m.settings.automation.replyDelay, { min: 0, max: 2 });
+  const custom = defaultData();
+  custom.settings.automation.replyDelay = { min: 5, max: 20 };
+  assert.deepEqual(migrate(custom).settings.automation.replyDelay, { min: 5, max: 20 });
+});

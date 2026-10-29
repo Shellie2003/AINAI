@@ -1,5 +1,6 @@
 // Google Gemini via Google AI Studio (offre gratuite) – API REST generateContent.
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const modelCache = new Map();
 
 export const geminiProvider = {
   type: 'gemini',
@@ -23,7 +24,8 @@ export const geminiProvider = {
       // Surcharge (503) ou quota du modèle épuisé (429) : chaque modèle gratuit a ses propres limites,
       // on dépanne avec un autre modèle Gemini avant de passer à une autre IA.
       if (!err.retryable) throw err;
-      const backups = pickBackupModels(await this.listModels({ apiKey }).catch(() => []), model);
+      // Après un délai dépassé, un seul modèle de secours : on ne fait pas attendre le client plus longtemps
+      const backups = pickBackupModels(await this.listModels({ apiKey }).catch(() => []), model, err.status === 504 ? 1 : 2);
       for (const backup of backups) {
         try {
           return { ...(await generateOnce({ ...request, model: backup })), model: backup, temporaryModel: true };
@@ -36,13 +38,19 @@ export const geminiProvider = {
   },
 
   async listModels({ apiKey }) {
-    const res = await fetch(`${BASE}/models?pageSize=200`, { headers: { 'x-goog-api-key': apiKey } });
+    // Liste gardée 1 h : évite un appel réseau supplémentaire à chaque surcharge
+    const cached = modelCache.get(apiKey);
+    if (cached && Date.now() - cached.at < 3600_000) return cached.list;
+    const res = await fetch(`${BASE}/models?pageSize=200`, { headers: { 'x-goog-api-key': apiKey }, signal: AbortSignal.timeout(10_000) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw httpError('Gemini', res.status, data?.error?.message);
-    return (data.models || [])
+    const list = (data.models || [])
       .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
       .map((m) => m.name.replace(/^models\//, ''));
+    modelCache.set(apiKey, { at: Date.now(), list });
+    return list;
   },
+
 };
 
 export function httpError(provider, status, detail) {
@@ -53,6 +61,19 @@ export function httpError(provider, status, detail) {
   return err;
 }
 
+// Modèles qui ont refusé notre réglage de réflexion : on ne le renvoie plus.
+const noThinkingConfig = new Set();
+
+/** Réflexion au minimum : pour des réponses de service client, c'est beaucoup plus rapide et aussi bon. */
+export function thinkingConfigFor(model) {
+  if (noThinkingConfig.has(model)) return null;
+  const major = Number(model.match(/gemini-(\d+)/)?.[1] || 0);
+  if (major >= 3) return { thinkingLevel: 'low' };
+  if (/gemini-2\.5-flash/.test(model)) return { thinkingBudget: 0 };
+  if (/gemini-2\.5-pro/.test(model)) return { thinkingBudget: 128 };
+  return null;
+}
+
 async function generateOnce({ apiKey, model, system, messages, json, maxTokens, signal }) {
   const contents = messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -61,24 +82,40 @@ async function generateOnce({ apiKey, model, system, messages, json, maxTokens, 
       { text: m.text || ' ' },
     ],
   }));
+  const thinkingConfig = thinkingConfigFor(model);
   const body = {
     systemInstruction: { parts: [{ text: system }] },
     contents,
     generationConfig: {
-      // Les modèles Gemini récents « réfléchissent » avant de répondre : marge large pour ne pas couper la réponse
-      maxOutputTokens: Math.max(maxTokens, 8192),
+      maxOutputTokens: Math.max(maxTokens, 4096),
       temperature: 0.7,
       ...(json ? { responseMimeType: 'application/json' } : {}),
+      ...(thinkingConfig ? { thinkingConfig } : {}),
     },
   };
-  const res = await fetch(`${BASE}/models/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify(body),
-    signal,
-  });
+  // Chaque essai a son propre délai : un modèle trop lent ne bloque pas toute la chaîne de secours.
+  const attemptSignal = AbortSignal.any([signal, AbortSignal.timeout(geminiRetry.attemptMs)].filter(Boolean));
+  let res;
+  try {
+    res = await fetch(`${BASE}/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+      signal: attemptSignal,
+    });
+  } catch (err) {
+    if (signal?.aborted || !attemptSignal.aborted) throw err;
+    throw httpError('Gemini', 504, `délai dépassé (${geminiRetry.attemptMs / 1000} s) pour ${model}`);
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw httpError('Gemini', res.status, data?.error?.message);
+  if (!res.ok) {
+    // Réglage de réflexion refusé par ce modèle : on réessaie sans, et on s'en souvient
+    if (res.status === 400 && thinkingConfig && /thinking/i.test(data?.error?.message || '')) {
+      noThinkingConfig.add(model);
+      return generateOnce({ apiKey, model, system, messages, json, maxTokens, signal });
+    }
+    throw httpError('Gemini', res.status, data?.error?.message);
+  }
   const cand = data.candidates?.[0];
   const text = (cand?.content?.parts || [])
     .filter((p) => !p.thought && p.text)
@@ -105,7 +142,7 @@ export function pickBestModel(models, current) {
 }
 
 // Délais entre deux essais quand Google est surchargé (modifiables dans les tests).
-export const geminiRetry = { delays: [1500, 4000] };
+export const geminiRetry = { delays: [1000], attemptMs: 20_000 };
 
 async function generateWithRetry(request) {
   for (let attempt = 0; ; attempt++) {
@@ -114,7 +151,8 @@ async function generateWithRetry(request) {
     } catch (err) {
       // Les 503 « high demand » sont en général très courts : on réessaie avant d'abandonner (pas les 429 de quota).
       const delay = geminiRetry.delays[attempt];
-      if (!(err.status >= 500) || delay === undefined || request.signal?.aborted) throw err;
+      // (pas après un délai dépassé : on passe directement à un modèle plus léger)
+      if (!(err.status >= 500) || err.status === 504 || delay === undefined || request.signal?.aborted) throw err;
       await new Promise((r) => setTimeout(r, delay));
     }
   }

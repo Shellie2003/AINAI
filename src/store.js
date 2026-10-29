@@ -36,9 +36,9 @@ export function defaultData() {
           privateReplyOnLead: true,
           ignoreReplies: false,
         },
-        messages: { enabled: true, mode: 'auto', aggregateSeconds: 6, memorySize: 12 },
+        messages: { enabled: true, mode: 'auto', aggregateSeconds: 3, memorySize: 12 },
         humanTakeoverHours: 12,
-        replyDelay: { min: 3, max: 12 },
+        replyDelay: { min: 0, max: 2 },
         businessHours: { enabled: false, start: '08:00', end: '18:00', timezone: 'Indian/Antananarivo', offHoursNote: '' },
         escalationMessage: 'Merci pour votre message ! Un membre de notre équipe vous répond très vite 🙏',
       },
@@ -66,6 +66,20 @@ function merge(base, extra) {
 
 const MAX_CONVERSATIONS = 1000;
 
+const SETTINGS_VERSION = 2;
+
+/** Met à jour les anciens réglages par défaut (réponses plus rapides depuis la v2), sans toucher aux choix de l'utilisateur. */
+export function migrate(data) {
+  const v = data.settingsVersion || 1;
+  if (v < 2) {
+    const a = data.settings.automation;
+    if (a.messages.aggregateSeconds === 6) a.messages.aggregateSeconds = 3;
+    if (a.replyDelay.min === 3 && a.replyDelay.max === 12) a.replyDelay = { min: 0, max: 2 };
+  }
+  data.settingsVersion = SETTINGS_VERSION;
+  return data;
+}
+
 class Store {
   /**
    * @param file   fichier JSON local (serveur avec disque permanent)
@@ -80,7 +94,7 @@ class Store {
     this.dirty = false;
     if (file && fs.existsSync(file)) {
       try {
-        this.data = merge(defaultData(), JSON.parse(fs.readFileSync(file, 'utf8')));
+        this.data = migrate(merge(defaultData(), JSON.parse(fs.readFileSync(file, 'utf8'))));
       } catch (err) {
         console.error('[store] db.json illisible, sauvegarde et réinitialisation', err.message);
         fs.copyFileSync(file, `${file}.corrupt-${Date.now()}`);
@@ -94,7 +108,7 @@ class Store {
     for (let attempt = 1; ; attempt++) {
       try {
         const remoteData = await this.remote.load();
-        if (remoteData) this.data = merge(defaultData(), remoteData);
+        if (remoteData) this.data = migrate(merge(defaultData(), remoteData));
         this.ready = true;
         console.log(`[store] données chargées depuis ${this.remote.name}`);
         return;

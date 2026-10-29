@@ -1,6 +1,6 @@
 import { generateWithFallback } from './ai/index.js';
 
-const KNOWLEDGE_BUDGET = 24000; // caractères de base de connaissances injectés au maximum
+const KNOWLEDGE_BUDGET = 12000; // caractères de base de connaissances injectés au maximum (prompt court = réponse rapide)
 
 export const normalize = (s) =>
   String(s || '')

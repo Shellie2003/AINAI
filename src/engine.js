@@ -54,6 +54,7 @@ async function onFeedChange(page, change) {
     if (postCache.size > 500) postCache.delete(postCache.keys().next().value);
   }
 
+  const started = Date.now();
   const result = await deps.think(store.settings, {
     channel: 'comment',
     history: [{ role: 'user', text: v.message }],
@@ -83,7 +84,7 @@ async function onFeedChange(page, change) {
   }
   if (!result.reply && !result.privateMessage) return;
   if (auto.mode === 'approval') return enqueue(item);
-  await deps.sleep(randomDelay(store.settings.automation.replyDelay));
+  await deps.sleep(Math.max(0, randomDelay(store.settings.automation.replyDelay) - (Date.now() - started)));
   await executeComment(item, result.reply, result.privateMessage);
 }
 
@@ -196,8 +197,11 @@ async function replyToConversation(page, conv, media) {
   const auto = store.settings.automation.messages;
   const history = conv.messages.slice(-(Number(auto.memorySize) || 12)).map((m) => ({ role: m.role, text: m.text }));
   if (media.length && history.length) history[history.length - 1].media = media;
-  await deps.fb.senderAction(page.token, conv.userId, 'mark_seen');
+  // « Vu » + « en train d'écrire… » tout de suite (sans attendre la réponse de Facebook) : le client sait qu'on l'a lu
+  deps.fb.senderAction(page.token, conv.userId, 'mark_seen');
+  if (auto.mode !== 'approval') deps.fb.senderAction(page.token, conv.userId, 'typing_on');
 
+  const started = Date.now();
   const result = await deps.think(store.settings, { channel: 'message', history, userName: conv.name });
   const item = {
     id: randomId(),
@@ -219,8 +223,8 @@ async function replyToConversation(page, conv, media) {
   const reply = result.reply || (result.needsHuman ? store.settings.automation.escalationMessage : '');
   if (!reply) return;
   if (auto.mode === 'approval') return enqueue({ ...item, result: { ...result, reply } });
-  await deps.fb.senderAction(page.token, conv.userId, 'typing_on');
-  await deps.sleep(randomDelay(store.settings.automation.replyDelay));
+  // Le temps de réflexion de l'IA compte déjà dans le délai « humain » : on n'attend que le reste
+  await deps.sleep(Math.max(0, randomDelay(store.settings.automation.replyDelay) - (Date.now() - started)));
   await executeMessage(item, reply);
 }
 

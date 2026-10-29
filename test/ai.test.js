@@ -88,7 +88,7 @@ test('modèle retiré sans suggestion : choix du meilleur « flash » disponible
 
 test('Gemini surchargé (503) : nouvel essai, puis modèle de dépannage', async (t) => {
   const { geminiRetry } = await import('../src/ai/gemini.js');
-  geminiRetry.delays = [0, 0];
+  geminiRetry.delays = [0];
   // 1) 503 passager : le 2e essai réussit
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async () => {
@@ -109,7 +109,7 @@ test('Gemini surchargé (503) : nouvel essai, puis modèle de dépannage', async
     if (u.includes('gemini-3.8-flash:')) return Response.json({ error: { message: 'high demand' } }, { status: 503 });
     return Response.json({ candidates: [{ content: { parts: [{ text: 'secours' }] } }] });
   });
-  const p2 = { id: 'r2', type: 'gemini', apiKey: encrypt('k'), model: 'gemini-3.8-flash' };
+  const p2 = { id: 'r2', type: 'gemini', apiKey: encrypt('k-surcharge'), model: 'gemini-3.8-flash' };
   const out = await generateWithFallback([p2], { system: 's', messages: [{ role: 'user', text: 'a' }] });
   assert.equal(out.text, 'secours');
   assert.equal(out.model, 'gemini-3.8-flash-lite');
@@ -148,4 +148,42 @@ test('mode JSON refusé par un modèle : nouvel essai sans', async (t) => {
 test('choix du remplaçant OpenRouter : uniquement des modèles gratuits', async () => {
   const { pickOpenAiModel } = await import('../src/ai/openai.js');
   assert.equal(pickOpenAiModel(['openai/gpt-oss-120b', 'meta-llama/llama-3.3-70b-instruct:free', 'x/y:free'], 'z', 'openrouter'), 'meta-llama/llama-3.3-70b-instruct:free');
+});
+
+test('Gemini 3 : réflexion réglée au niveau bas ; réglage retiré si le modèle le refuse', async (t) => {
+  const { thinkingConfigFor } = await import('../src/ai/gemini.js');
+  assert.deepEqual(thinkingConfigFor('gemini-3.8-flash'), { thinkingLevel: 'low' });
+  assert.deepEqual(thinkingConfigFor('gemini-2.5-flash'), { thinkingBudget: 0 });
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async (_url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.generationConfig.thinkingConfig) return Response.json({ error: { message: 'thinking_level is not supported for this model' } }, { status: 400 });
+    return Response.json({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] });
+  });
+  const out = await generateWithFallback([{ id: 'th', type: 'gemini', apiKey: encrypt('k-th'), model: 'gemini-3.9-flash' }], { system: 's', messages: [{ role: 'user', text: 'a' }] });
+  assert.equal(out.text, 'ok');
+  assert.equal(bodies.length, 2);
+  assert.equal(thinkingConfigFor('gemini-3.9-flash'), null);
+});
+
+test('Gemini trop lent : délai par essai, puis modèle de secours', async (t) => {
+  const { geminiRetry } = await import('../src/ai/gemini.js');
+  geminiRetry.attemptMs = 50;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    const u = String(url);
+    if (u.includes('/models?')) return Response.json({ models: [{ name: 'models/gemini-3.8-flash-lite', supportedGenerationMethods: ['generateContent'] }] });
+    if (u.includes('gemini-3.8-flash:')) {
+      return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new DOMException('timeout', 'TimeoutError'))));
+    }
+    return Response.json({ candidates: [{ content: { parts: [{ text: 'rapide' }] } }] });
+  });
+  const started = Date.now();
+  const keepAlive = setInterval(() => {}, 1000); // AbortSignal.timeout ne garde pas le processus de test en vie
+  t.after(() => clearInterval(keepAlive));
+  const out = await generateWithFallback([{ id: 'slow', type: 'gemini', apiKey: encrypt('k-slow'), model: 'gemini-3.8-flash' }], { system: 's', messages: [{ role: 'user', text: 'a' }] });
+  assert.equal(out.text, 'rapide');
+  assert.equal(out.model, 'gemini-3.8-flash-lite');
+  assert.ok(Date.now() - started < 2000);
+  geminiRetry.attemptMs = 20_000;
 });
