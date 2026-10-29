@@ -187,3 +187,24 @@ test('Gemini trop lent : délai par essai, puis modèle de secours', async (t) =
   assert.ok(Date.now() - started < 2000);
   geminiRetry.attemptMs = 20_000;
 });
+
+test('crédit épuisé (402) : message clair et IA mise de côté pour ne pas ralentir les réponses', async (t) => {
+  const { resetCooldown } = await import('../src/ai/index.js');
+  let deepseekCalls = 0;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).includes('deepseek')) {
+      deepseekCalls++;
+      return Response.json({ error: { message: 'Insufficient Balance' } }, { status: 402 });
+    }
+    return Response.json({ choices: [{ message: { content: 'ok' } }] });
+  });
+  const providers = [{ id: 'ds', type: 'deepseek', apiKey: encrypt('sk') }, { id: 'gq', type: 'groq', apiKey: encrypt('gsk') }];
+  const out = await generateWithFallback(providers, { system: 's', messages: [{ role: 'user', text: 'a' }] });
+  assert.equal(out.provider, 'Groq (gratuit, très rapide)');
+  assert.match(out.errors[0], /crédit épuisé/);
+  await generateWithFallback(providers, { system: 's', messages: [{ role: 'user', text: 'b' }] });
+  assert.equal(deepseekCalls, 1); // mis de côté
+  resetCooldown('ds');
+  await generateWithFallback(providers, { system: 's', messages: [{ role: 'user', text: 'c' }] });
+  assert.equal(deepseekCalls, 2);
+});

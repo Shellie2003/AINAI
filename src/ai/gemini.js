@@ -53,8 +53,16 @@ export const geminiProvider = {
 
 };
 
+// Explications en clair pour les erreurs courantes des fournisseurs
+const HINTS = {
+  401: 'clé API invalide : recopiez-la',
+  402: 'crédit épuisé : ce service est payant. Rechargez votre compte ou désactivez cette IA',
+  403: 'accès refusé : vérifiez la clé et les droits de votre compte',
+};
+
 export function httpError(provider, status, detail) {
-  const err = new Error(`${provider} ${status}: ${detail || 'erreur'}`);
+  const hint = HINTS[status] ? ` → ${HINTS[status]}` : '';
+  const err = new Error(`${provider} ${status}: ${detail || 'erreur'}${hint}`);
   err.status = status;
   // 429 = quota gratuit dépassé, 5xx = panne : on passe à l'IA suivante
   err.retryable = status === 429 || status >= 500 || status === 408;

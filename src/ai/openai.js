@@ -6,8 +6,8 @@ export const OPENAI_PRESETS = {
   cerebras: { label: 'Cerebras (gratuit, très rapide)', baseUrl: 'https://api.cerebras.ai/v1', defaultModel: 'gpt-oss-120b', keyUrl: 'https://cloud.cerebras.ai/platform/' },
   openrouter: { label: 'OpenRouter (modèles gratuits)', baseUrl: 'https://openrouter.ai/api/v1', defaultModel: 'openrouter/free', keyUrl: 'https://openrouter.ai/keys' },
   mistral: { label: 'Mistral AI (offre gratuite)', baseUrl: 'https://api.mistral.ai/v1', defaultModel: 'mistral-small-latest', keyUrl: 'https://console.mistral.ai/api-keys' },
-  openai: { label: 'OpenAI (ChatGPT)', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', keyUrl: 'https://platform.openai.com/api-keys' },
-  deepseek: { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat', keyUrl: 'https://platform.deepseek.com/api_keys' },
+  openai: { label: 'OpenAI (ChatGPT, payant)', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', keyUrl: 'https://platform.openai.com/api-keys' },
+  deepseek: { label: 'DeepSeek (payant)', baseUrl: 'https://api.deepseek.com/v1', defaultModel: 'deepseek-chat', keyUrl: 'https://platform.deepseek.com/api_keys' },
   ollama: { label: 'Ollama (local)', baseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3.1', keyUrl: '' },
   custom: { label: 'Autre (compatible OpenAI)', baseUrl: '', defaultModel: '', keyUrl: '' },
 };

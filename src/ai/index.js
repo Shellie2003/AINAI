@@ -23,6 +23,9 @@ export function providerCatalog() {
 // Mise en veille temporaire d'une IA qui renvoie « quota dépassé » (429).
 const cooldown = new Map();
 
+// Après un changement de clé ou un test manuel, on redonne sa chance à l'IA.
+export const resetCooldown = (id) => cooldown.delete(id);
+
 function supportsMedia(impl, mime) {
   return impl.media.some((prefix) => mime.startsWith(prefix));
 }
@@ -57,7 +60,7 @@ export async function generateWithFallback(providers, request, { timeoutMs = 450
   const errors = [];
   for (const p of ordered) {
     if ((cooldown.get(p.id) || 0) > Date.now()) {
-      errors.push(`${p.name || p.type}: en pause (quota)`);
+      errors.push(`${p.name || p.type}: en pause (quota, crédit ou clé : réessai automatique plus tard)`);
       continue;
     }
     const impl = PROVIDERS[p.type];
@@ -77,7 +80,9 @@ export async function generateWithFallback(providers, request, { timeoutMs = 450
       }
       return { ...out, provider: p.name || impl.label, providerId: p.id, model: out.model || p.model || impl.defaultModel, ms: Date.now() - started, errors };
     } catch (err) {
+      // Quota (429) : pause 1 min. Crédit épuisé ou clé refusée : pause 1 h, inutile de faire attendre les clients.
       if (err.status === 429) cooldown.set(p.id, Date.now() + 60_000);
+      if ([401, 402, 403].includes(err.status)) cooldown.set(p.id, Date.now() + 3600_000);
       errors.push(`${p.name || p.type}: ${err.message}`);
     }
   }

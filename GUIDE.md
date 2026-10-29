@@ -34,6 +34,7 @@ Ajoutez-les dans l'onglet **🧠 Moteurs IA** : **Fournisseur** → collez la cl
 | **Cerebras** | <https://cloud.cerebras.ai> → **API Keys** → **Generate API Key** (`csk-…`) | `gpt-oss-120b` | Très rapide. En gratuit, la conversation est limitée en longueur : il convient comme secours, avec une base de connaissances courte. |
 | **OpenRouter** | <https://openrouter.ai/keys> → **Create Key** (`sk-or-…`) | `openrouter/free` | Choisit à chaque fois un modèle gratuit disponible. Limité à environ 50 requêtes par jour sans crédit acheté. |
 | **Mistral** | <https://console.mistral.ai> → choisir le plan **Experiment** (gratuit, vérification par téléphone) → **API Keys** | `mistral-small-latest` | IA européenne, bonne en français. |
+| **DeepSeek** (payant) | <https://platform.deepseek.com> | `deepseek-chat` | Pas d'offre gratuite : il faut recharger le compte, sinon erreur 402. |
 | **Claude** (payant) | <https://console.anthropic.com/settings/keys> | `claude-opus-5-5` | Excellente rédaction. `claude-haiku-5-5` est bien moins cher. |
 
 **Comment ça marche :**

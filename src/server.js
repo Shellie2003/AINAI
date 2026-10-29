@@ -6,7 +6,7 @@ import { config } from './config.js';
 import { store } from './store.js';
 import { encrypt, decrypt, mask, randomId, safeEqual } from './crypto.js';
 import { login, logout, setup, needsSetup, isAuthenticated, requireAuth } from './auth.js';
-import { providerCatalog, generateWithFallback, listModels, PROVIDERS } from './ai/index.js';
+import { providerCatalog, generateWithFallback, listModels, PROVIDERS, resetCooldown } from './ai/index.js';
 import { think } from './brain.js';
 import * as fb from './facebook/graph.js';
 import { handleWebhook, approveQueueItem, rejectQueueItem, executeMessage } from './engine.js';
@@ -242,6 +242,7 @@ app.put('/api/providers/:id', requireAuth, (req, res) => {
   const { name, apiKey, model, baseUrl: url, enabled } = req.body || {};
   if (name !== undefined) p.name = name;
   if (apiKey) p.apiKey = encrypt(apiKey);
+  resetCooldown(p.id);
   if (model !== undefined) p.model = model;
   if (url !== undefined) p.baseUrl = url;
   if (enabled !== undefined) p.enabled = Boolean(enabled);
@@ -258,6 +259,7 @@ app.delete('/api/providers/:id', requireAuth, (req, res) => {
 app.post('/api/providers/:id/test', requireAuth, wrap(async (req, res) => {
   const p = store.settings.providers.find((x) => x.id === req.params.id);
   if (!p) throw new Error('IA introuvable');
+  resetCooldown(p.id);
   const out = await generateWithFallback([{ ...p, enabled: true }], {
     system: 'Tu es un test de connexion. Réponds en une courte phrase en français.',
     messages: [{ role: 'user', text: 'Dis bonjour et indique quel modèle tu es.' }],
